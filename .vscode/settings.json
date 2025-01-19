@@ -1,0 +1,19 @@
+{
+    "C_Cpp.intelliSenseEngine": "default",
+    "idf.espIdfPathWin": "C:\\Users\\cullb\\esp\\v5.3.2\\esp-idf",
+    "idf.openOcdConfigs": [
+        "board/esp32s3-builtin.cfg"
+    ],
+    "idf.portWin": "COM8",
+    "idf.toolsPathWin": "C:\\Users\\cullb\\.espressif",
+    "idf.flashType": "UART",
+    "files.associations": {
+        "mcpwm_cap.h": "c",
+        "rc_input.h": "c",
+        "task.h": "c",
+        "rmt_tx.h": "c",
+        "gpio.h": "c",
+        "esp_system.h": "c",
+        "freertos.h": "c"
+    }
+}

@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+C:/dev/fulltech/build/CMakeFiles/bootloader
+C:/dev/fulltech/build/CMakeFiles/bootloader.rule
+C:/dev/fulltech/build/CMakeFiles/bootloader-complete.rule
+C:/dev/fulltech/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+C:/dev/fulltech/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+C:/dev/fulltech/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+C:/dev/fulltech/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+C:/dev/fulltech/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+C:/dev/fulltech/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+C:/dev/fulltech/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
