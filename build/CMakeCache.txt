@@ -358,6 +358,9 @@ PYTHON:UNINITIALIZED=C:\Users\cullb\.espressif\python_env\idf5.3_py3.11_env\Scri
 //No help, variable specified on the command line.
 PYTHON_DEPS_CHECKED:UNINITIALIZED=1
 
+//No help, variable specified on the command line.
+SDKCONFIG:UNINITIALIZED=c:\dev\fulltech\sdkconfig
+
 //Allow unsafe builds. These builds ARE NOT SECURE.
 UNSAFE_BUILD:BOOL=OFF
 
