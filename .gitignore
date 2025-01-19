@@ -1,6 +1,3 @@
-/build/*
-/.vscode/*
-/.devcontainer/*
-build/*
-
+/.vscode
+/.devcontainer
 /build
