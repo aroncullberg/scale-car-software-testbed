@@ -1,12 +1,10 @@
 idf_component_register(
-    SRCS 
-        "main.c"
-        "pwm_input.c"
-        "dshot_esc_encoder.c"
-    INCLUDE_DIRS 
-        "."
-    REQUIRES 
-        driver      # For MCPWM
-        freertos    # For FreeRTOS functionality
-        esp_common  # For ESP error codes
+    SRCS "main.cpp"
+    INCLUDE_DIRS "include"
+    REQUIRES "freertos"
+)
+
+target_compile_options(${COMPONENT_LIB} PRIVATE 
+    -fno-rtti  # Disable RTTI
+    -fno-exceptions  # Optional: also disable exceptions if not needed
 )

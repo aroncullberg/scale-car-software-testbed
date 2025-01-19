@@ -1,7 +1,7 @@
 {
     "version":            "1.1",
     "project_name":       "fulltech",
-    "project_version":    "1",
+    "project_version":    "53d2745-dirty",
     "project_path":       "C:/dev/fulltech",
     "idf_path":           "C:/Users/cullb/esp/v5.3.2/esp-idf",
     "build_dir":          "C:/dev/fulltech/build",
@@ -1175,13 +1175,13 @@
             "dir": "C:/dev/fulltech/main",
             "type": "LIBRARY",
             "lib": "__idf_main",
-            "reqs": [ "driver", "freertos", "esp_common" ],
+            "reqs": [ "freertos" ],
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
             "file": "C:/dev/fulltech/build/esp-idf/main/libmain.a",
-            "sources": [ "C:/dev/fulltech/main/main.c", "C:/dev/fulltech/main/pwm_input.c", "C:/dev/fulltech/main/dshot_esc_encoder.c" ],
-            "include_dirs": [ "." ]
+            "sources": [ "C:/dev/fulltech/main/main.cpp" ],
+            "include_dirs": [ "include" ]
         },
         "mbedtls": {
             "alias": "idf::mbedtls",
@@ -2802,11 +2802,11 @@
             "prefix": "idf",
             "dir": "C:/dev/fulltech/main",
             "lib": "__idf_main",
-            "reqs": [ "driver", "freertos", "esp_common" ],
+            "reqs": [ "freertos" ],
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "include_dirs": [ "." ]
+            "include_dirs": [ "include" ]
         }
     },
     "debug_prefix_map_gdbinit": ""

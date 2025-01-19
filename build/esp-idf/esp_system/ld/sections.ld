@@ -669,6 +669,18 @@ SECTIONS
     *(.gnu.linkonce.h.*)
     __XT_EXCEPTION_DESCS_END__ = ABSOLUTE(.);
     *(.xt_except_desc_end)
+    
+ . = ALIGN(4); 
+ __eh_frame = ABSOLUTE(.);
+    KEEP(*(.eh_frame))
+    /**
+
+     * As we are not linking with crtend.o, which includes the CIE terminator
+
+     * (see __FRAME_END__ in libgcc sources), it is manually provided here.
+
+     */
+    LONG(0);
     /**
 
      * C++ constructor tables.
@@ -856,7 +868,6 @@ SECTIONS
   {
    *(.fini)
    *(.eh_frame_hdr)
-   *(.eh_frame)
   }
 }
 ASSERT(((_iram_end - ORIGIN(iram0_0_seg)) <= LENGTH(iram0_0_seg)),

@@ -2,34 +2,37 @@
     "configurations": [
         {
             "name": "ESP-IDF",
-            "compilerPath": "${config:idf.toolsPathWin}\\tools\\xtensa-esp-elf\\esp-13.2.0_20240530\\xtensa-esp-elf\\bin\\xtensa-esp32-elf-gcc.exe",
-            // "compileCommands": "${config:idf.buildPath}/compile_commands.json",
+            "compilerPath": "${config:idf.toolsPathWin}\\tools\\xtensa-esp-elf\\esp-13.2.0_20240530\\xtensa-esp-elf\\bin\\xtensa-esp32s3-elf-g++.exe",
             "cStandard": "c11",
             "cppStandard": "c++17",
             "includePath": [
                 "${config:idf.espIdfPath}/components/**",
                 "${config:idf.espIdfPathWin}/components/**",
                 "${workspaceFolder}/build/config",
-                "${config:idf.espAdfPath}/components/**",
-                "${config:idf.espAdfPathWin}/components/**",
-                "${config:idf.espMdfPath}/components/**",
-                "${config:idf.espMdfPathWin}/components/**",
+                "${workspaceFolder}/build/config/*",
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/src",
                 "${workspaceFolder}/**"
             ],
             "browse": {
                 "path": [
-                    "${workspaceFolder}/build/config",
                     "${config:idf.espIdfPath}/components",
                     "${config:idf.espIdfPathWin}/components",
-                    "${config:idf.espAdfPath}/components/**",
-                    "${config:idf.espAdfPathWin}/components/**",
-                    "${config:idf.espMdfPath}/components/**",
-                    "${config:idf.espMdfPathWin}/components/**",
+                    "${workspaceFolder}/build/config",
                     "${workspaceFolder}"
                 ],
                 "limitSymbolsToIncludedHeaders": false
             },
-            "intelliSenseMode": "gcc-x64"
+            "intelliSenseMode": "gcc-x64",
+            "compilerArgs": [
+                "-mlongcalls"
+            ],
+            "defines": [
+                "ESP_PLATFORM",
+                "ESP32",
+                "_GNU_SOURCE",
+                "__cpp_exceptions=0"
+            ]
         }
     ],
     "version": 4

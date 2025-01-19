@@ -2,5 +2,15 @@
 # in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.16)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Consider adding explicit error checking
+if(NOT DEFINED ENV{IDF_PATH})
+  message(FATAL_ERROR "IDF_PATH environment variable is not set")
+endif()
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+
 project(fulltech)
