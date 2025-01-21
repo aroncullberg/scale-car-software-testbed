@@ -2,7 +2,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sbus.h"
-#include "motor_control.h"
 #include "esp_log.h"
 
 #ifndef TAG
@@ -12,7 +11,6 @@
 #define SBUS_RX_PIN GPIO_NUM_18
 #define SBUS_TX_PIN GPIO_NUM_5
 #define SBUS_UART UART_NUM_1
-#define DSHOT_PIN GPIO_NUM_21  // Adjust based on your setup
 
 // Global objects
 SBUS *sbus = nullptr;

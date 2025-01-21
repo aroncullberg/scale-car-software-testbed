@@ -2,7 +2,6 @@ idf_component_register(
     SRCS 
         "main.cpp"
         "sbus.cpp"
-        "DShotRMT.cpp"
     INCLUDE_DIRS 
         "include"
         "."
