@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+
 # Consider adding explicit error checking
 if(NOT DEFINED ENV{IDF_PATH})
   message(FATAL_ERROR "IDF_PATH environment variable is not set")

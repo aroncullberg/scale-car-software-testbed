@@ -1,0 +1,8 @@
+idf_component_register(
+    SRCS 
+        "data_pool.cpp"
+    INCLUDE_DIRS 
+        "."
+    REQUIRES
+        "SBUS"
+)
