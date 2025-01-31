@@ -8,10 +8,19 @@ void VehicleData::updateSBUS(const sensor::SbusData& data) {
     sbus_timestamp_.store(xTaskGetTickCount());
 }
 
+void VehicleData::updateGPS(const sensor::GPSData& data) {
+    gps_ = data;
+    gps_timestamp_.store(xTaskGetTickCount());
+}
+
 // put more updaters here (when needed)
 
 sensor::SbusData VehicleData::getSbus() const {
     return sbus_;
+}
+
+sensor::GPSData VehicleData::getGPS() const {
+    return gps_;
 }
 
 // put more updaters here (when needed)

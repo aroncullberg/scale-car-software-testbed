@@ -1,11 +1,12 @@
 idf_component_register(
     SRCS 
-        "sbus.cpp"
+        "gps.cpp"
     INCLUDE_DIRS 
         "."
     REQUIRES         
         "driver"
+        "freertos"
         "esp_common"
         "data_pool"
-        "freertos"
+        "TinyGPSPlus-ESPIDF"
 )
