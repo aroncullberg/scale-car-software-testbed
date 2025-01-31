@@ -1,0 +1,646 @@
+menu "SBUS Configuration"
+
+    # Enable SBUS
+    config SBUS_ENABLE
+        bool "Enable SBUS"
+        default y
+        help 
+            Enable the SBUS component for input
+
+    # Task configuration
+    config SBUS_TASK_STACK_SIZE
+        int "SBUS Task Stack Size"
+        default 4096
+        help
+            Stack size for SBUS processing task
+
+    config SBUS_TASK_PRIORITY
+        int "SBUS Task Priority"
+        default 5
+        range 0 25
+        help
+            Priority of the SBUS processing task
+
+    # Channel configuration
+    menu "Channel Configuration"
+        # Channel 0 (Throttle)
+        menu "Channel 0 (Throttle)"
+            choice SBUS_CH0_TYPE
+                prompt "Ch 0 Type"
+                default SBUS_CH0_SYMMETRIC
+                help 
+                    Select the type of channel 0 (Throttle)
+                
+                config SBUS_CH0_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH0_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH0_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH0_MIN
+                int "Channel 0 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 0
+    
+            config SBUS_CH0_CENTER
+                int "Channel 0 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH0_SYMMETRIC
+                help
+                    Center raw value for channel 0 (only used for symmetric channels)
+    
+            config SBUS_CH0_MAX
+                int "Channel 0 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 0
+        endmenu
+
+        # Channel 1 (Steering)
+        menu "Channel 1 (Steering)"
+            choice SBUS_CH1_TYPE
+                prompt "Ch 1 Type"
+                default SBUS_CH1_SYMMETRIC
+                help 
+                    Select the type of channel 1 (Steering)
+                
+                config SBUS_CH1_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH1_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH1_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH1_MIN
+                int "Channel 1 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 1
+    
+            config SBUS_CH1_CENTER
+                int "Channel 1 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH1_SYMMETRIC
+                help
+                    Center raw value for channel 1 (only used for symmetric channels)
+    
+            config SBUS_CH1_MAX
+                int "Channel 1 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 1
+        endmenu
+
+        # Channels 2-15 (Auxiliary Channels)
+            # Channel 2
+        menu "Channel 2 (Aux 1)"
+            choice SBUS_CH2_TYPE
+                prompt "Ch 2 Type"
+                default SBUS_CH2_SYMMETRIC
+                help 
+                    Select the type of channel 2 (Aux 1)
+                
+                config SBUS_CH2_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH2_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH2_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH2_MIN
+                int "Channel 2 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 2
+    
+            config SBUS_CH2_CENTER
+                int "Channel 2 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH2_SYMMETRIC
+                help
+                    Center raw value for channel 2 (only used for symmetric channels)
+    
+            config SBUS_CH2_MAX
+                int "Channel 2 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 2
+        endmenu
+
+        # Channel 3
+        menu "Channel 3 (Aux 2)"
+            choice SBUS_CH3_TYPE
+                prompt "Ch 3 Type"
+                default SBUS_CH3_SYMMETRIC
+                help 
+                    Select the type of channel 3 (Aux 2)
+                
+                config SBUS_CH3_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH3_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH3_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH3_MIN
+                int "Channel 3 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 3
+    
+            config SBUS_CH3_CENTER
+                int "Channel 3 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH3_SYMMETRIC
+                help
+                    Center raw value for channel 3 (only used for symmetric channels)
+    
+            config SBUS_CH3_MAX
+                int "Channel 3 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 3
+        endmenu
+
+        # Channel 4
+        menu "Channel 4 (Aux 3)"
+            choice SBUS_CH4_TYPE
+                prompt "Ch 4 Type"
+                default SBUS_CH4_SYMMETRIC
+                help 
+                    Select the type of channel 4 (Aux 3)
+                
+                config SBUS_CH4_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH4_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH4_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH4_MIN
+                int "Channel 4 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 4
+    
+            config SBUS_CH4_CENTER
+                int "Channel 4 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH4_SYMMETRIC
+                help
+                    Center raw value for channel 4 (only used for symmetric channels)
+    
+            config SBUS_CH4_MAX
+                int "Channel 4 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 4
+        endmenu
+
+        # Channel 5
+        menu "Channel 5 (Aux 4)"
+            choice SBUS_CH5_TYPE
+                prompt "Ch 5 Type"
+                default SBUS_CH5_SYMMETRIC
+                help 
+                    Select the type of channel 5 (Aux 4)
+                
+                config SBUS_CH5_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH5_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH5_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH5_MIN
+                int "Channel 5 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 5
+    
+            config SBUS_CH5_CENTER
+                int "Channel 5 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH5_SYMMETRIC
+                help
+                    Center raw value for channel 5 (only used for symmetric channels)
+    
+            config SBUS_CH5_MAX
+                int "Channel 5 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 5
+        endmenu
+
+        # Channel 6
+        menu "Channel 6 (Aux 5)"
+            choice SBUS_CH6_TYPE
+                prompt "Ch 6 Type"
+                default SBUS_CH6_SYMMETRIC
+                help 
+                    Select the type of channel 6 (Aux 5)
+                
+                config SBUS_CH6_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH6_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH6_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH6_MIN
+                int "Channel 6 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 6
+    
+            config SBUS_CH6_CENTER
+                int "Channel 6 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH6_SYMMETRIC
+                help
+                    Center raw value for channel 6 (only used for symmetric channels)
+    
+            config SBUS_CH6_MAX
+                int "Channel 6 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 6
+        endmenu
+
+        # Channel 7
+        menu "Channel 7 (Aux 6)"
+            choice SBUS_CH7_TYPE
+                prompt "Ch 7 Type"
+                default SBUS_CH7_SYMMETRIC
+                help 
+                    Select the type of channel 7 (Aux 6)
+                
+                config SBUS_CH7_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH7_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH7_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH7_MIN
+                int "Channel 7 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 7
+    
+            config SBUS_CH7_CENTER
+                int "Channel 7 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH7_SYMMETRIC
+                help
+                    Center raw value for channel 7 (only used for symmetric channels)
+    
+            config SBUS_CH7_MAX
+                int "Channel 7 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 7
+        endmenu
+
+        # Channel 8
+        menu "Channel 8 (Aux 7)"
+            choice SBUS_CH8_TYPE
+                prompt "Ch 8 Type"
+                default SBUS_CH8_SYMMETRIC
+                help 
+                    Select the type of channel 8 (Aux 7)
+                
+                config SBUS_CH8_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH8_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH8_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH8_MIN
+                int "Channel 8 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 8
+    
+            config SBUS_CH8_CENTER
+                int "Channel 8 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH8_SYMMETRIC
+                help
+                    Center raw value for channel 8 (only used for symmetric channels)
+    
+            config SBUS_CH8_MAX
+                int "Channel 8 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 8
+        endmenu
+
+        # Channel 9
+        menu "Channel 9 (Aux 8)"
+            choice SBUS_CH9_TYPE
+                prompt "Ch 9 Type"
+                default SBUS_CH9_SYMMETRIC
+                help 
+                    Select the type of channel 9 (Aux 8)
+                
+                config SBUS_CH9_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH9_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH9_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH9_MIN
+                int "Channel 9 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 9
+    
+            config SBUS_CH9_CENTER
+                int "Channel 9 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH9_SYMMETRIC
+                help
+                    Center raw value for channel 9 (only used for symmetric channels)
+    
+            config SBUS_CH9_MAX
+                int "Channel 9 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 9
+        endmenu
+
+        # Channel 10
+        menu "Channel 10 (Aux 9)"
+            choice SBUS_CH10_TYPE
+                prompt "Ch 10 Type"
+                default SBUS_CH10_SYMMETRIC
+                help 
+                    Select the type of channel 10 (Aux 9)
+                
+                config SBUS_CH10_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH10_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH10_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH10_MIN
+                int "Channel 10 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 10
+    
+            config SBUS_CH10_CENTER
+                int "Channel 10 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH10_SYMMETRIC
+                help
+                    Center raw value for channel 10 (only used for symmetric channels)
+    
+            config SBUS_CH10_MAX
+                int "Channel 10 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 10
+        endmenu
+
+        # Channel 11
+        menu "Channel 11 (Aux 10)"
+            choice SBUS_CH11_TYPE
+                prompt "Ch 11 Type"
+                default SBUS_CH11_SYMMETRIC
+                help 
+                    Select the type of channel 11 (Aux 10)
+                
+                config SBUS_CH11_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH11_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH11_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH11_MIN
+                int "Channel 11 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 11
+    
+            config SBUS_CH11_CENTER
+                int "Channel 11 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH11_SYMMETRIC
+                help
+                    Center raw value for channel 11 (only used for symmetric channels)
+    
+            config SBUS_CH11_MAX
+                int "Channel 11 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 11
+        endmenu
+
+        # Channel 12
+        menu "Channel 12 (Aux 11)"
+            choice SBUS_CH12_TYPE
+                prompt "Ch 12 Type"
+                default SBUS_CH12_SYMMETRIC
+                help 
+                    Select the type of channel 12 (Aux 11)
+                
+                config SBUS_CH12_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH12_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH12_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH12_MIN
+                int "Channel 12 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 12
+    
+            config SBUS_CH12_CENTER
+                int "Channel 12 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH12_SYMMETRIC
+                help
+                    Center raw value for channel 12 (only used for symmetric channels)
+    
+            config SBUS_CH12_MAX
+                int "Channel 12 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 12
+        endmenu
+        # Channel 13
+        menu "Channel 14 (Aux 13)"
+            choice SBUS_CH13_TYPE
+                prompt "Ch 13 Type"
+                default SBUS_CH13_SYMMETRIC
+                help 
+                    Select the type of channel 13 (Aux 12)
+                
+                config SBUS_CH13_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH13_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH13_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH13_MIN
+                int "Channel 13 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 13
+    
+            config SBUS_CH13_CENTER
+                int "Channel 13 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH13_SYMMETRIC
+                help
+                    Center raw value for channel 13 (only used for symmetric channels)
+    
+            config SBUS_CH13_MAX
+                int "Channel 13 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 13
+        endmenu
+        menu "Channel 14 (Aux 13)"
+            choice SBUS_CH14_TYPE
+                prompt "Ch 14 Type"
+                default SBUS_CH14_SYMMETRIC
+                help 
+                    Select the type of channel 14 (Aux 13)
+                
+                config SBUS_CH14_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH14_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH14_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH14_MIN
+                int "Channel 14 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 14
+    
+            config SBUS_CH14_CENTER
+                int "Channel 14 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH14_SYMMETRIC
+                help
+                    Center raw value for channel 14 (only used for symmetric channels)
+    
+            config SBUS_CH14_MAX
+                int "Channel 14 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 14
+        endmenu
+        menu "Channel 15 (Aux 14)"
+            choice SBUS_CH15_TYPE
+                prompt "Ch 15 Type"
+                default SBUS_CH15_SYMMETRIC
+                help 
+                    Select the type of channel 15 (Aux 14)
+                
+                config SBUS_CH15_SYMMETRIC
+                    bool "Symmetric (-1 to 1)"
+                config SBUS_CH15_UNIPOLAR
+                    bool "Unipolar (0 to 1)"
+                config SBUS_CH15_BINARY
+                    bool "Binary (0 or 1)"
+            endchoice
+
+            config SBUS_CH15_MIN
+                int "Channel 15 Minimum Value"
+                default 172
+                range 0 2047
+                help
+                    Minimum raw value for channel 15
+    
+            config SBUS_CH15_CENTER
+                int "Channel 15 Center Value"
+                default 992
+                range 0 2047
+                depends on SBUS_CH15_SYMMETRIC
+                help
+                    Center raw value for channel 15 (only used for symmetric channels)
+    
+            config SBUS_CH15_MAX
+                int "Channel 15 Maximum Value"
+                default 1811
+                range 0 2047
+                help
+                    Maximum raw value for channel 15
+        endmenu
+    endmenu
+endmenu

@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS 
+        "sbus.cpp"
+    INCLUDE_DIRS 
+        "."
+    REQUIRES         
+        "driver"
+        "esp_common"
+        "data_pool"
+)

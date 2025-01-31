@@ -1,18 +1,16 @@
 idf_component_register(
     SRCS 
         "main.cpp"
-        "sbus.cpp"
     INCLUDE_DIRS 
         "include"
         "."
     REQUIRES         
-        "driver"      # For MCPWM and UART
-        "esp_timer"   # For timestamp functions
-        "freertos"    # For FreeRTOS functionality
-        "nvs_flash"   # For NVS initialization
-        "hal"         # Hardware Abstraction Layer for GPIO
-
+        "esp_timer"
+        "freertos"
+        "data_pool"
+        "SBUS"
 )
+
 
 target_compile_options(${COMPONENT_LIB} PRIVATE 
     -fno-rtti  # Disable RTTI
