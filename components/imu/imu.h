@@ -22,6 +22,14 @@ struct ImuData {
     float gyro_x{0.0f};
     float gyro_y{0.0f};
     float gyro_z{0.0f};
+
+    float accel_cal_x{0.0f};
+    float accel_cal_y{0.0f};
+    float accel_cal_z{0.0f};
+
+    float gyro_cal_x{0.0f};
+    float gyro_cal_y{0.0f};
+    float gyro_cal_z{0.0f};
     
     // Quaternion orientation
     float quat_w{1.0f};  // Real component
@@ -30,11 +38,24 @@ struct ImuData {
     float quat_z{0.0f};  // k component
     uint16_t quat_accuracy{0}; // DMP accuracy indicator
 
+    // game roation vector (for smooth rotations)
+    float game_quat_w{1.0f};
+    float game_quat_x{0.0f};
+    float game_quat_y{0.0f};
+    float game_quat_z{0.0f};
+
+    // grav vector
+    float linear_accel_x{0.0f};
+    float linear_accel_y{0.0f};
+    float linear_accel_z{0.0f};
+
     // Quality metrics
     struct {
         bool valid_data{false};      // Indicates if data is valid
         uint32_t error_count{0};     // Cumulative error counter
         float update_rate_hz{0.0f};  // Current update rate
+        float accel_accuracy{0.0f};
+        float gyro_accuracy{0.0f};
     } quality;
 
     // Default constructor for zero-initialization

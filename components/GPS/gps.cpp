@@ -3,6 +3,7 @@
 #include "gps.h"
 #include "esp_log.h"
 #include <data_pool.h>
+#include <inttypes.h>
 
 namespace sensor {
 
@@ -67,11 +68,15 @@ esp_err_t GPS::configureUART() {
         return err;
     }
 
-    const char* ubx_factory_reset = 
-        "\xB5\x62\x06\x09\x0D\x00\xFF\xFF\x00\x00\x00\x00\x00\x00\xFF\xFF\x00\x00\x17\x2B\x7E";
+    // Send UBX command to disable UBX protocol
+    const char* ubx_cfg_prt = "\xB5\x62\x06\x00\x14\x00\x01\x00\x00\x00\xD0\x08\x00\x00\x00\xC2\x01\x00\x07\x00\x01\x00\x00\x00\x00\x00\xC0\x7E";
+    uart_write_bytes(config_t.uart_num, ubx_cfg_prt, 28);  // Exact 28-byte UBX packet
 
-    // In GPS::configureUART(), after initializing UART:
-    uart_write_bytes(config_t.uart_num, ubx_factory_reset, strlen(ubx_factory_reset));
+    // const char* ubx_factory_reset = 
+    //     "\xB5\x62\x06\x09\x0D\x00\xFF\xFF\x00\x00\x00\x00\x00\x00\xFF\xFF\x00\x00\x17\x2B\x7E";
+
+    // // In GPS::configureUART(), after initializing UART:
+    // uart_write_bytes(config_t.uart_num, ubx_factory_reset, strlen(ubx_factory_reset));
     vTaskDelay(pdMS_TO_TICKS(100)); // Wait for command to process
 
 
@@ -125,7 +130,7 @@ void GPS::gpsTask(void* parameters) {
     const uart_port_t uart_num = gps->config_t.uart_num;
     
     // Buffer for reading UART data
-    uint8_t data[128];  // Smaller buffer since we process more frequently
+    uint8_t data[512];  // Smaller buffer since we process more frequently
     
     ESP_LOGI(TAG, "GPS task started");
     TickType_t last_wake_time = xTaskGetTickCount();
@@ -143,6 +148,7 @@ void GPS::gpsTask(void* parameters) {
                                            0);  // No waiting
             
             if (read_length > 0) {
+                // ESP_LOGI(TAG, "%s", data);
                 // Feed data to TinyGPS++
                 for (int i = 0; i < read_length; i++) {
                     gps->tiny_gps_.encode(data[i]);
@@ -194,7 +200,12 @@ void GPS::processGPSData() {
         data.time.minutes = tiny_gps_.time.minute();
         data.time.seconds = tiny_gps_.time.second();
         data.time.milliseconds = tiny_gps_.time.centisecond() * 10;
-        
+
+        // ESP_LOGI(TAG, "-----------------------------------");
+        // ESP_LOGI(TAG, "latitude: %" PRIu32, data.latitude);
+        // ESP_LOGI(TAG, "longitude: %" PRIu32, data.longitude);
+        // ESP_LOGI(TAG, "-----------------------------------");
+
         // Update vehicle data pool
         ::VehicleData::instance().updateGPS(data);
     }

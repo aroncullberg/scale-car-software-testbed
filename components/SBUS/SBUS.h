@@ -14,8 +14,8 @@ enum class SbusChannelType : uint8_t {
 };
 
 enum class SbusChannel : uint8_t {
-    STEERING = 0,
-    THROTTLE = 1,
+    THROTTLE = 0,
+    STEERING = 1,
     AUX1 = 2,
     AUX2 = 3,
     AUX3 = 4,

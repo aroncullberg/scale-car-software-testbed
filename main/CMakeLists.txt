@@ -10,6 +10,8 @@ idf_component_register(
         "SBUS"
         "GPS"
         "imu"
+        "data_manager"
+
 )
 
 

@@ -73,19 +73,8 @@ public:
 private:
     static constexpr const char* TAG = "GPS";
 
-    bool parseNMEASentence(const char* sentence);
-    bool parseGGA(const char* message); // position & fix data
-    bool parseRMC(const char* message); // recomended minimum data
-    bool parseVTG(const char* message); // Vector track & speed
-    bool checksum(const char* message); // NMEA checksum validation
-
     void processGPSData();  // New method to handle data updates
 
-
-    // NOTE: uint32_t vs int32_t?
-    static int32_t parseLatLong(const char* value, char direction);
-    static uint16_t calculateChecksum(const char* message);
-    
     esp_err_t configureUART();
 
     static void gpsTask(void* parameters);
@@ -93,7 +82,7 @@ private:
 
     TinyGPSPlus tiny_gps_;
     Config config_t;
-    GPSData current_data{};
+    GPSData current_data{}; // TODO: rename to current_data_
 
     bool is_running{false};
 };
