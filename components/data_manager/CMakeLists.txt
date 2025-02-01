@@ -1,0 +1,11 @@
+idf_component_register(
+    SRCS 
+        "DataManager.cpp"
+    INCLUDE_DIRS 
+        "."
+    REQUIRES         
+        "driver"
+        "freertos"
+        "esp_common"
+        "data_pool"
+)

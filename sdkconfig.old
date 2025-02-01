@@ -742,6 +742,12 @@ CONFIG_SBUS_CH15_MAX=1825
 # end of SBUS Configuration
 
 #
+# ICM-20948 Settings
+#
+# CONFIG_ICM_20948_USE_DMP is not set
+# end of ICM-20948 Settings
+
+#
 # Compiler options
 #
 CONFIG_COMPILER_OPTIMIZATION_DEBUG=y
