@@ -1,0 +1,12 @@
+idf_component_register(
+    SRCS 
+        "imu.cpp"
+    INCLUDE_DIRS 
+        "."
+    REQUIRES         
+        "driver"
+        "freertos"
+        "esp_common"
+        "data_pool"
+        "icm20948"
+)

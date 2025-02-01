@@ -13,6 +13,12 @@ void VehicleData::updateGPS(const sensor::GPSData& data) {
     gps_timestamp_.store(xTaskGetTickCount());
 }
 
+void VehicleData::updateIMU(const sensor::ImuData& data) {
+    imu_ = data;
+    imu_timestamp_.store(xTaskGetTickCount());
+}
+
+
 // put more updaters here (when needed)
 
 sensor::SbusData VehicleData::getSbus() const {
@@ -21,6 +27,10 @@ sensor::SbusData VehicleData::getSbus() const {
 
 sensor::GPSData VehicleData::getGPS() const {
     return gps_;
+}
+
+sensor::ImuData VehicleData::getImu() const {
+    return imu_;
 }
 
 // put more updaters here (when needed)

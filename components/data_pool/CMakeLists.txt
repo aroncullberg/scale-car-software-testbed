@@ -5,5 +5,6 @@ idf_component_register(
         "."
     REQUIRES
         "SBUS"
+        "imu"
         "GPS"
 )
