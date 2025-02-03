@@ -1,11 +1,13 @@
 idf_component_register(
     SRCS 
-        "steering_control.cpp"
+        "telemetry_manager.cpp"
+        "esp_now_interface.cpp"
     INCLUDE_DIRS 
         "."
+        "include"
     REQUIRES         
-        "driver"
         "freertos"
         "esp_common"
-        "data_pool"
+        "esp_wifi"
+        "newlib"
 )

@@ -7,6 +7,7 @@
 #include "SBUS.h"
 #include "gps.h"
 #include "DataManager.h"
+#include "telemetry_manager.h"
 
 #ifndef TAG
 #define TAG "main"

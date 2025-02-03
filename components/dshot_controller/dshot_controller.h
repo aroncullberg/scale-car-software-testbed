@@ -8,6 +8,9 @@ extern "C" {
     #include "dshot_esc_encoder.h"
 }
 #include "esp_err.h"
+#include "freertos/FreeRTOS.h"
+#include "esp_check.h"
+
 
 class DshotController {
 public:

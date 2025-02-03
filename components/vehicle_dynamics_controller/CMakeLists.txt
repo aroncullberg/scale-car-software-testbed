@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS 
-        "vehicle_dyanmics_control.cpp"
+        "vehicle_dynamics_controller.cpp"
     INCLUDE_DIRS 
         "."
     REQUIRES         

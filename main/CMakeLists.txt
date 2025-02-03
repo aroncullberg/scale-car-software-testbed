@@ -11,6 +11,7 @@ idf_component_register(
         "GPS"
         "imu"
         "data_manager"
+        "TelemetryManager"
 
 )
 

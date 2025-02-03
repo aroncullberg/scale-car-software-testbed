@@ -8,5 +8,5 @@ idf_component_register(
         "freertos"
         "esp_common"
         "data_pool"
-        "tinygpsplus-espidf"
+        "tinygps-espidf"
 )
