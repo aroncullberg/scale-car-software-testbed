@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS 
-        "gps.cpp"
+        "dshot_controller.cpp"
+        "dshot_esc_encoder.h"
     INCLUDE_DIRS 
         "."
     REQUIRES         
@@ -8,5 +9,4 @@ idf_component_register(
         "freertos"
         "esp_common"
         "data_pool"
-        "tinygpsplus-espidf"
 )

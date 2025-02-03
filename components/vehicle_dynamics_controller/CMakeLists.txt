@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS 
-        "gps.cpp"
+        "vehicle_dyanmics_control.cpp"
     INCLUDE_DIRS 
         "."
     REQUIRES         
@@ -8,5 +8,4 @@ idf_component_register(
         "freertos"
         "esp_common"
         "data_pool"
-        "tinygpsplus-espidf"
 )

@@ -13,5 +13,6 @@ if(NOT DEFINED ENV{IDF_PATH})
 endif()
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+set(MINIMUM_ESP_IDF_VERSION "v5.4")
 
 project(fulltech)
