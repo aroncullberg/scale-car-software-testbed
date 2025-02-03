@@ -1,0 +1,6 @@
+[submodule "components/tinygps-espidf"]
+	path = components/tinygps-espidf
+	url = https://github.com/andyfinity/TinyGPSPlus-ESPIDF
+[submodule "components/icm20948"]
+	path = components/icm20948
+	url = https://github.com/aroncullberg/icm20948
