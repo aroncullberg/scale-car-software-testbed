@@ -1,58 +1,81 @@
 #pragma once
 
-#include "esp_now_interface.h"
-#include "esp_err.h"
+#include "esp_now.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
-#include <memory>  // Include for std::unique_ptr
-#include "telemetry_types.h" // Include shared types
+#include "freertos/task.h"
+#include "esp_err.h"
 
-
-// Forward declarations (?)
 namespace sensor {
     struct ImuData;
     struct GPSData;
     struct SbusData;
 }
 
-
-
-namespace Telemetry {
-    
-class TelemetryManager{
+namespace telemetry {
+class TelemetryManager {
 public:
+
     struct Config {
-        uint8_t peer_mac[ESP_NOW_ETH_ALEN];
-        uint8_t wifi_channel{0};
-        uint16_t queue_size{16}; 
+        uint8_t peer_mac[6];
+        size_t queue_size{16};
+        TickType_t task_period{pdMS_TO_TICKS(10)};
+        TickType_t fetcher_period{pdMS_TO_TICKS(1000)}; // 1000ms default for fetching
+        uint8_t esp_now_channel{0};
+        uint8_t task_priority{5};
+        uint8_t fetcher_priority{5};
+        size_t task_stack_size{4096};
+        size_t fetcher_stack_size{4096};
     };
 
-    using TelemetryQueueItem = Telemetry::TelemetryQueueItem;
+    enum class PacketType : uint8_t {
+        COMMAND = 0x01,
+        TEXT = 0x02,
+        SENSOR = 0x03,
+        HEARTBEAT = 0x04,
+    };
 
-    explicit TelemetryManager(const Config& config);
-    ~TelemetryManager();
+    static TelemetryManager& instance() {
+        static TelemetryManager instance;
+        return instance;
+    };
 
-    // Delete copy and move operations
-    TelemetryManager(const TelemetryManager&) = delete;
-    TelemetryManager& operator=(const TelemetryManager&) = delete;
-    TelemetryManager(TelemetryManager&&) = delete;
-    TelemetryManager& operator=(TelemetryManager&&) = delete;
-
-    esp_err_t init();
+    esp_err_t init(const Config& config);
     esp_err_t start();
     esp_err_t stop();
 
-    // For datamanager
-    QueueHandle_t getQueue() const { return telemetry_queue_; }
-
+    esp_err_t queueSensorData(const sensor::ImuData& data);
+    esp_err_t queueSensorData(const sensor::GPSData& data);
+    esp_err_t queueSensorData(const sensor::SbusData& data);
+    esp_err_t queueTextMessage(const char* msg, uint8_t severity = 0);
 
 private:
-    static constexpr const char* TAG = "TelemetryManager";
+    TelemetryManager() = default;
+    ~TelemetryManager();
 
-    Config config_;
+    // Delete copy/move
+    TelemetryManager(const TelemetryManager&) = delete;
+    TelemetryManager& operator =(const TelemetryManager&) = delete;
+    TelemetryManager(TelemetryManager&&) = delete;
+    TelemetryManager& operator=(TelemetryManager&&) = delete;
+
+    static void telemetryTask(void* params);
+    static void dataFetcherTask(void* params);
+    static void espNowSendCallback(const uint8_t* mac_addr, esp_now_send_status_t status);
+    static void espNowReceiveCallback(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
+
+    esp_err_t initEspNow();
+    esp_err_t initWifi();
+    esp_err_t transmitPacket(const void* data, size_t len);
+
+    static constexpr uint8_t MAGIC_BYTE = 0xAE;
+    static constexpr const char* TAG = "TelemetryMgr";
+
+    Config config_{};
     QueueHandle_t telemetry_queue_{nullptr};
-    std::unique_ptr<Telemetry::EspNowInterface> esp_now_interface_;
-    bool is_initialized_{false};
+    TaskHandle_t task_handle_{nullptr};
+    TaskHandle_t fetcher_task_handle_{nullptr};
+    esp_now_peer_info_t peer_info_{};
     bool is_running_{false};
 };
 }

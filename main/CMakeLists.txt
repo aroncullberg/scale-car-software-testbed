@@ -10,11 +10,10 @@ idf_component_register(
         "SBUS"
         "GPS"
         "imu"
-        "data_manager"
         "TelemetryManager"
-
+        "dshot_controller"
+        "servo"
 )
-
 
 target_compile_options(${COMPONENT_LIB} PRIVATE 
     -fno-rtti  # Disable RTTI

@@ -1,13 +1,14 @@
 idf_component_register(
     SRCS 
         "telemetry_manager.cpp"
-        "esp_now_interface.cpp"
     INCLUDE_DIRS 
         "."
-        "include"
     REQUIRES         
         "freertos"
         "esp_common"
         "esp_wifi"
-        "newlib"
+        "data_pool"
+        "imu"
+        "SBUS"
+        "GPS"
 )

@@ -1,11 +1,8 @@
 idf_component_register(
     SRCS 
-        "dshot.cpp"
-        "dshot_esc_encoder.c"
+        "servo.cpp"
     INCLUDE_DIRS 
         "."
     REQUIRES         
         "driver"
-        "esp_common"
-        "freertos"
 )

@@ -6,8 +6,9 @@
 #include "imu.h"
 #include "SBUS.h"
 #include "gps.h"
-#include "DataManager.h"
 #include "telemetry_manager.h"
+#include "servo.h"
+#include "dshot.h"
 
 #ifndef TAG
 #define TAG "main"
@@ -90,12 +91,12 @@ extern "C" void app_main(void) {
 
     // << IMU 
 
-    DataManager::Config dm_config = {
-        .task_period = pdMS_TO_TICKS(1000)
-    };
+    // DataManager::Config dm_config = {
+    //     .task_period = pdMS_TO_TICKS(1000)
+    // };
 
-    DataManager* dm = new DataManager(dm_config);
-    ESP_ERROR_CHECK(dm->start());
+    // DataManager* dm = new DataManager(dm_config);
+    // ESP_ERROR_CHECK(dm->start());
 
     // Keep the main task alive
     while(1) {
