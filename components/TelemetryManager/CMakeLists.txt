@@ -7,6 +7,7 @@ idf_component_register(
         "freertos"
         "esp_common"
         "esp_wifi"
+        "nvs_flash"
         "data_pool"
         "imu"
         "SBUS"

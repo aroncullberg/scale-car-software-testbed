@@ -58,8 +58,8 @@ class SBUS {
     public:
     struct Config {
         uart_port_t uart_num;
-        gpio_num_t uart_tx_pin;
-        gpio_num_t uart_rx_pin;
+        gpio_num_t uart_tx_pin{GPIO_NUM_NC};
+        gpio_num_t uart_rx_pin{GPIO_NUM_NC};
         int baud_rate{100000}; // NOTE: This value needs to be doublechecked against sbus standard baud rate. 
     };
 

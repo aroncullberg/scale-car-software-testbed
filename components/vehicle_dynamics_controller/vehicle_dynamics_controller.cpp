@@ -1,10 +1,9 @@
 #include "vehicle_dynamics_controller.h"
 #include "esp_log.h"
 
-namespace control {
-
 VehicleDynamicsController::VehicleDynamicsController(const Config& config)
-    : config_(config) {
+    : config_(config)
+    , steering_servo_(config.steering_servo) {
 }
 
 VehicleDynamicsController::~VehicleDynamicsController() {
@@ -12,33 +11,36 @@ VehicleDynamicsController::~VehicleDynamicsController() {
 }
 
 esp_err_t VehicleDynamicsController::init() {
-    ESP_LOGI(TAG, "Initializing Vehicle Dynamics Controller");
+    esp_err_t err = steering_servo_.setPosition(0.0f); // Center the servo
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize steering servo: %s", esp_err_to_name(err));
+        return err;
+    }
+    
     return ESP_OK;
 }
 
 esp_err_t VehicleDynamicsController::start() {
     if (is_running_) {
-        ESP_LOGW(TAG, "Vehicle Dynamics Controller already running");
-        return ESP_ERR_INVALID_STATE;
+        return ESP_OK;
     }
 
-    BaseType_t ret = xTaskCreatePinnedToCore(
+    // Create the controller task
+    BaseType_t ret = xTaskCreate(
         controllerTask,
-        "vdc_task",
-        4096,                // Stack size
-        this,               // Parameter
+        "veh_dynamics",
+        config_.task_stack_size,
+        this,
         config_.task_priority,
-        &task_handle_,
-        config_.task_core_id
+        &task_handle_
     );
 
     if (ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create Vehicle Dynamics Controller task");
+        ESP_LOGE(TAG, "Failed to create vehicle dynamics task");
         return ESP_FAIL;
     }
 
     is_running_ = true;
-    ESP_LOGI(TAG, "Vehicle Dynamics Controller started");
     return ESP_OK;
 }
 
@@ -53,53 +55,33 @@ esp_err_t VehicleDynamicsController::stop() {
     }
 
     is_running_ = false;
-    ESP_LOGI(TAG, "Vehicle Dynamics Controller stopped");
     return ESP_OK;
 }
 
-VehicleDynamicsController::MotorThrottles 
-VehicleDynamicsController::calculateMotorThrottles(float base_throttle, float front_rear_split) const {
-    MotorThrottles throttles;
-    
-    // Calculate front and rear power based on split
-    float front_power = base_throttle * (front_rear_split);
-    float rear_power = base_throttle * (1.0f - front_rear_split);
-
-    // Apply to all wheels
-    throttles.front_left = front_power;
-    throttles.front_right = front_power;
-    throttles.rear_left = rear_power;
-    throttles.rear_right = rear_power;
-
-    return throttles;
-}
-
-void VehicleDynamicsController::controllerTask(void* parameters) {
-    auto* controller = static_cast<VehicleDynamicsController*>(parameters);
+void VehicleDynamicsController::controllerTask(void* arg) {
+    auto* controller = static_cast<VehicleDynamicsController*>(arg);
     TickType_t last_wake_time = xTaskGetTickCount();
 
     while (true) {
-        // Get throttle input from SBUS
-        sensor::SbusData sbus = VehicleData::instance().getSbus();
-        
-        // Read base throttle (assuming channel 0 is throttle)
-        float base_throttle = sbus.channels[0];
-        
-        // Read front/rear split from configured AUX channel
-        float front_rear_split = controller->config_.default_front_rear_split;
-        if (controller->config_.front_rear_split_channel < 16) {
-            front_rear_split = (sbus.channels[controller->config_.front_rear_split_channel] + 1.0f) * 0.5f; // Convert -1 to 1 into 0 to 1
-        }
-
-        // Calculate individual motor throttles
-        controller->current_throttles_ = controller->calculateMotorThrottles(base_throttle, front_rear_split);
-
-        // Update motor throttles in data pool
-        // TODO: Add motor throttles to data pool structure and update here
-
-        // Wait for next cycle
+        controller->updateSteering();
         vTaskDelayUntil(&last_wake_time, controller->config_.task_period);
     }
 }
 
-} // namespace control
+esp_err_t VehicleDynamicsController::updateSteering() {
+    // Get latest SBUS data from the data pool
+    sensor::SbusData sbus_data = VehicleData::instance().getSbus();
+    
+    // SBUS steering channel is channel 1 (array index 1)
+    // Value is already scaled from -1.0 to 1.0 by the SBUS driver
+    float steering_position = sbus_data.channels[static_cast<size_t>(sensor::SbusChannel::STEERING)];
+    
+    // Set the servo position directly
+    esp_err_t err = steering_servo_.setPosition(steering_position);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set steering position: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    return ESP_OK;
+}

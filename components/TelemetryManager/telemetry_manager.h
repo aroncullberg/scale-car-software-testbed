@@ -17,10 +17,22 @@ class TelemetryManager {
 public:
 
     struct Config {
-        uint8_t peer_mac[6];
+        enum class LoggingMode : uint8_t {
+            // NOTE: Just trying out Doxygen-style comments, want this in the end but im to lazy to do it for everything right now.
+            /**
+             * @brief Only outputs logs locally using ESP_LOG macros. \n
+             * Messages will appear on the serial console but won't be transmitted. 
+             */
+            LOCAL_ONLY = 0,
+            WIRELESS_ONLY = 1,
+            BOTH = 2,
+        };
+
+        LoggingMode logging_mode{static_cast<LoggingMode>(CONFIG_TELEMETRY_MODE)}; // NOTE: Yes i know that this is bad but it works so shutup
+        uint8_t peer_mac[6]{0};
         size_t queue_size{16};
         TickType_t task_period{pdMS_TO_TICKS(10)};
-        TickType_t fetcher_period{pdMS_TO_TICKS(1000)}; // 1000ms default for fetching
+        TickType_t fetcher_period{pdMS_TO_TICKS(1000)};
         uint8_t esp_now_channel{0};
         uint8_t task_priority{5};
         uint8_t fetcher_priority{5};
@@ -31,9 +43,13 @@ public:
     enum class PacketType : uint8_t {
         COMMAND = 0x01,
         TEXT = 0x02,
-        SENSOR = 0x03,
-        HEARTBEAT = 0x04,
+        SENSOR_IMU = 0x03,
+        SENSOR_GPS = 0x04,
+        SENSOR_SBUS = 0x05,
+        HEARTBEAT = 0x06,
     };
+    
+    
 
     static TelemetryManager& instance() {
         static TelemetryManager instance;
@@ -59,6 +75,7 @@ private:
     TelemetryManager(TelemetryManager&&) = delete;
     TelemetryManager& operator=(TelemetryManager&&) = delete;
 
+
     static void telemetryTask(void* params);
     static void dataFetcherTask(void* params);
     static void espNowSendCallback(const uint8_t* mac_addr, esp_now_send_status_t status);
@@ -66,7 +83,20 @@ private:
 
     esp_err_t initEspNow();
     esp_err_t initWifi();
+    esp_err_t initNVS(); // NOTE: this is requried for wifi (unsure if espnow needs it but i would guess so)
+    esp_err_t initNetworking(); // NOTE: This is requried for espnow/wifi
     esp_err_t transmitPacket(const void* data, size_t len);
+
+    bool wirelessLogging() const {
+        return config_.logging_mode == Config::LoggingMode::WIRELESS_ONLY ||
+               config_.logging_mode == Config::LoggingMode::BOTH;
+    }
+
+    bool localLogging() const {
+        return config_.logging_mode == Config::LoggingMode::LOCAL_ONLY ||
+                config_.logging_mode == Config::LoggingMode::BOTH;
+    }
+
 
     static constexpr uint8_t MAGIC_BYTE = 0xAE;
     static constexpr const char* TAG = "TelemetryMgr";

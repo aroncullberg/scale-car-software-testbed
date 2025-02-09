@@ -1,0 +1,28 @@
+menu "GPS Configuration"
+    config GPS_ENABLE
+        bool "Enable GPS"
+        default y
+        help 
+            Enable the GPS module
+
+    config GPS_UART_NUM
+        int "GPS UART"
+        default 2
+        range 0 2
+        help
+            Which uart is the gps connected to
+
+    config GPS_UART_RX
+        int "RX Pin"
+        default 15
+        range 0 48
+        help
+            uart rx pin for the yeepeesss
+
+    config GPS_UART_TX
+        int "TX Pin"
+        default 7
+        range 0 48
+        help
+            uart TX pin for the yeepeesss
+endmenu

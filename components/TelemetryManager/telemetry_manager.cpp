@@ -6,11 +6,11 @@
 #include "esp_wifi.h"
 #include "esp_mac.h"
 #include "esp_now.h"
-
+#include "nvs_flash.h"
+#include "inttypes.h"
 #include "imu.h"
 #include "gps.h"
 #include "sbus.h"
-
 
 
 namespace telemetry {
@@ -51,12 +51,6 @@ TelemetryManager::~TelemetryManager() {
 }
 
 
-/*
-MUST DO THIS BEFORE YOU init telemetrymanger
-
-ESP_ERROR_CHECK(esp_netif_init());
-ESP_ERROR_CHECK(esp_event_loop_create_default());
-*/
 esp_err_t TelemetryManager::init(const Config& config) {
     if (telemetry_queue_) {
         ESP_LOGE(TAG, "Already intialzied");
@@ -65,23 +59,40 @@ esp_err_t TelemetryManager::init(const Config& config) {
 
     config_ = config;
 
-    // Create telemetry queue
     telemetry_queue_ = xQueueCreate(config_.queue_size, sizeof(TelemetryQueueItem));
     if (!telemetry_queue_) {
         ESP_LOGE(TAG, "Failed to create telemetry queue");
         return ESP_ERR_NO_MEM;
     }
 
-    esp_err_t err = initEspNow();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initailzie ESP-NOW");
-        return err;
+    // Only initialize wireless components if needed
+    if (wirelessLogging()) {
+        ESP_ERROR_CHECK(initNVS());
+        ESP_ERROR_CHECK(initNetworking());
+        ESP_ERROR_CHECK(initEspNow());
     }
-
-    // Put data fetcher initializer here
 
     return ESP_OK;
 }
+
+esp_err_t TelemetryManager::initNVS() {
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    return ret;
+}
+
+esp_err_t TelemetryManager::initNetworking() {
+    esp_err_t err = esp_netif_init();
+    if (err != ESP_OK) return err;
+    
+    return esp_event_loop_create_default();
+}
+
+
+
 
 esp_err_t TelemetryManager::start() {
     if (!telemetry_queue_) {
@@ -89,14 +100,16 @@ esp_err_t TelemetryManager::start() {
         return ESP_ERR_INVALID_STATE;
     }
 
-    BaseType_t ret = xTaskCreatePinnedToCore(
+    BaseType_t ret;
+
+    ret = xTaskCreatePinnedToCore(
         telemetryTask,
         "telemetry",
         config_.task_stack_size,
         this,
         config_.task_priority,
         &task_handle_,
-        0 // core 1
+        1 // core
     );
 
     if (ret != pdPASS) {
@@ -115,7 +128,7 @@ esp_err_t TelemetryManager::start() {
     );
 
     if (ret != pdPASS) {
-        // clena up first task if second fails
+        // NOTE: First task needs to be handled if the second one fails
         if (task_handle_) {
             vTaskDelete(task_handle_);
             task_handle_ = nullptr;
@@ -148,13 +161,15 @@ esp_err_t TelemetryManager::stop() {
 }
 
 
+
+
 esp_err_t TelemetryManager::queueSensorData(const sensor::ImuData& data) {
     if (!telemetry_queue_) {
         return ESP_ERR_INVALID_STATE;
     }
 
     TelemetryQueueItem item{
-        .type = PacketType::SENSOR,
+        .type = PacketType::SENSOR_IMU,
         .timestamp = xTaskGetTickCount(),
     };
     item.data.imu = data;
@@ -172,7 +187,7 @@ esp_err_t TelemetryManager::queueSensorData(const sensor::GPSData& data) {
     }
 
     TelemetryQueueItem item{
-        .type = PacketType::SENSOR,
+        .type = PacketType::SENSOR_GPS,
         .timestamp = xTaskGetTickCount(),
     };
     item.data.gps = data;
@@ -190,7 +205,7 @@ esp_err_t TelemetryManager::queueSensorData(const sensor::SbusData& data) {
     }
 
     TelemetryQueueItem item{
-        .type = PacketType::SENSOR,
+        .type = PacketType::SENSOR_SBUS,
         .timestamp = xTaskGetTickCount(),
     };
     item.data.sbus = data;
@@ -203,7 +218,7 @@ esp_err_t TelemetryManager::queueSensorData(const sensor::SbusData& data) {
 }
 
 esp_err_t TelemetryManager::queueTextMessage(const char* msg, uint8_t severity) {
-    if (telemetry_queue_ || !msg) {
+    if (!telemetry_queue_ || !msg) {
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -226,40 +241,90 @@ esp_err_t TelemetryManager::queueTextMessage(const char* msg, uint8_t severity) 
 }
 
 
+// In telemetry_manager.cpp
 void TelemetryManager::telemetryTask(void* params) {
     auto* manager = static_cast<TelemetryManager*>(params);
     TelemetryQueueItem item;
     static uint8_t sequence = 0;
 
-
     while (true) {
-        // TODO: have ticks at both addition to quque and sending
         if (xQueueReceive(manager->telemetry_queue_, &item, portMAX_DELAY) == pdPASS) {
-            PacketHeader header {
-                .magic = MAGIC_BYTE,
-                .type = static_cast<uint8_t>(item.type),
-                .sequence = sequence++,
-                .length = sizeof(item.data),
-                .ticks = xTaskGetTickCount()
-            };
+            ESP_LOGV(TAG, "Received item type %u from queue, timestamp: %" PRIu32, 
+                static_cast<unsigned>(item.type), item.timestamp);
 
-            // calculate totla packet size
-            size_t total_size = sizeof(header) + sizeof(item.data);
 
-            // temp buffer for complete packet
-            uint8_t packet_buffer[sizeof(PacketHeader) + sizeof(TelemetryQueueItem::PacketData)];
+            if (manager->localLogging()) {
+                // Log based on packet type
+                switch (item.type) {
+                    case PacketType::SENSOR_GPS:
+                        ESP_LOGI(TAG, "GPS Data - Lat: %" PRId32 ", Lon: %" PRId32 
+                            ", Alt: %" PRId32 "mm, Speed: %" PRIu32 "mm/s, Sats: %u", 
+                            item.data.gps.latitude,
+                            item.data.gps.longitude,
+                            item.data.gps.altitude_mm,
+                            item.data.gps.speed_mmps,
+                            item.data.gps.quality.satellites);
+                        break;
 
-            // copy header and data -> buffer
-            memcpy(packet_buffer, &header, sizeof(header));
-            memcpy(packet_buffer + sizeof(header), &item.data, sizeof(item.data));
+                    case PacketType::SENSOR_IMU:
+                        ESP_LOGI(TAG, "IMU Data - Accel(x:%.2f,y:%.2f,z:%.2f) "
+                            "Gyro(x:%.2f,y:%.2f,z:%.2f)", 
+                            item.data.imu.accel_x,
+                            item.data.imu.accel_y,
+                            item.data.imu.accel_z,
+                            item.data.imu.gyro_x,
+                            item.data.imu.gyro_y,
+                            item.data.imu.gyro_z);
+                        break;
 
-            esp_err_t err = manager->transmitPacket(packet_buffer, total_size);
-            if (err != ESP_OK) {
-                ESP_LOGW(TAG, "Failed to transmit packet type %d: %s", static_cast<int>(item.type), esp_err_to_name(err));
+                    case PacketType::SENSOR_SBUS:
+                        ESP_LOGI(TAG, "SBUS Data - Ch1:%.2f Ch2:%.2f Ch3:%.2f "
+                            "Valid:%d Loss:%u%%",
+                            item.data.sbus.channels[0],
+                            item.data.sbus.channels[1],
+                            item.data.sbus.channels[2],
+                            item.data.sbus.quality.valid_signal,
+                            item.data.sbus.quality.frame_loss_percent);
+                        break;
+
+                    case PacketType::TEXT:
+                        ESP_LOGI(TAG, "Message [%u]: %s", 
+                            item.data.text.severity,
+                            item.data.text.text);
+                        break;
+
+                    case PacketType::HEARTBEAT:
+                        ESP_LOGD(TAG, "Heartbeat packet");
+                        break;
+
+                    default:
+                        ESP_LOGW(TAG, "Unknown packet type: %u", 
+                            static_cast<unsigned>(item.type));
+                        break;
+                }
             }
 
-            
-            // TODO: DO stuff with esp now
+            if (manager->wirelessLogging()) {
+                PacketHeader header{
+                    .magic = MAGIC_BYTE,
+                    .type = static_cast<uint8_t>(item.type),
+                    .sequence = sequence++,
+                    .length = sizeof(item.data),
+                    .ticks = xTaskGetTickCount()
+                };
+
+                size_t total_size = sizeof(header) + sizeof(item.data);
+                uint8_t packet_buffer[sizeof(PacketHeader) + sizeof(TelemetryQueueItem::PacketData)];
+
+                memcpy(packet_buffer, &header, sizeof(header));
+                memcpy(packet_buffer + sizeof(header), &item.data, sizeof(item.data));
+
+                esp_err_t err = manager->transmitPacket(packet_buffer, total_size);
+                if (err != ESP_OK) {
+                    ESP_LOGW(TAG, "Failed to transmit packet type %d: %s", 
+                        static_cast<int>(item.type), esp_err_to_name(err));
+                }
+            }
         }
     }
 }
@@ -267,6 +332,7 @@ void TelemetryManager::telemetryTask(void* params) {
 void TelemetryManager::dataFetcherTask(void* params) {
     auto* manager = static_cast<TelemetryManager*>(params);
     TickType_t last_wake_time = xTaskGetTickCount();
+    
 
     while (true) {
         // get data from Vehicle singleton
@@ -280,6 +346,20 @@ void TelemetryManager::dataFetcherTask(void* params) {
 
         if (current_time - vehicle_data.getGPSTimestamp() < pdMS_TO_TICKS(100)) {
             manager->queueSensorData(vehicle_data.getGPS());
+
+            auto gps_data = vehicle_data.getGPS();
+            ESP_LOGI(TAG, "GPS Satellites: %u", gps_data.quality.satellites);
+            ESP_LOGI(TAG, "GPS Fix Type: %u", gps_data.quality.fix_type);
+            ESP_LOGI(TAG, "GPS Lat: %ld", gps_data.latitude);
+            ESP_LOGI(TAG, "GPS Lon: %ld", gps_data.longitude);
+            
+            if (gps_data.speed_valid) {
+                ESP_LOGI(TAG, "GPS Speed: %lu", gps_data.speed_mmps);
+            }
+                    
+            
+            manager->queueSensorData(gps_data);
+
         }
 
         if (current_time - vehicle_data.getSbusTimestamp() < pdMS_TO_TICKS(100)) {
@@ -308,6 +388,12 @@ esp_err_t TelemetryManager::initEspNow() {
     esp_err_t err = initWifi();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "ESP-NOW init failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_now_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize ESP-NOW: %s", esp_err_to_name(err));
         return err;
     }
 

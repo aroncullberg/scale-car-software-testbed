@@ -6,97 +6,99 @@
 #include "imu.h"
 #include "SBUS.h"
 #include "gps.h"
+#include "esp_netif.h"
 #include "telemetry_manager.h"
 #include "servo.h"
 #include "dshot.h"
+#include "nvs_flash.h"
+#include "esp_event.h"
+#include "vehicle_dynamics_controller.h"
+#include "esp_mac.h"
 
 #ifndef TAG
 #define TAG "main"
 #endif
 
-
 extern "C" void app_main(void) {
-    ESP_LOGI(TAG, "Starting SBUS test application");
-
-    // SBUS >>
-    sensor::SBUS::Config sbus_config = {
-        .uart_num = UART_NUM_1,        // Using UART1
-        .uart_tx_pin = GPIO_NUM_NC,    // Adjust according to your wiring
-        .uart_rx_pin = GPIO_NUM_18,    // Adjust according to your wiring
-        .baud_rate = 100000            // SBUS runs at 100k baud
+    // Configure telemetry manager
+    telemetry::TelemetryManager::Config telemetry_config = {
+        .peer_mac = {0xDC, 0xDA, 0x0C, 0x2A, 0x17, 0xD8},
+        .queue_size = 16,
+        .task_period = pdMS_TO_TICKS(10),
+        .fetcher_period = pdMS_TO_TICKS(1000),
+        .esp_now_channel = 0,
+        .task_priority = 5,
+        .fetcher_priority = 5,
+        .task_stack_size = 4096,
+        .fetcher_stack_size = 4096
     };
 
-    sensor::SBUS sbus(sbus_config);
-    esp_err_t err = sbus.init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize SBUS: %d", err);
-        return;
+    // Initialize and start telemetry manager
+    ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().init(telemetry_config));
+    ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().start());
+
+    if (CONFIG_SBUS_ENABLE) {
+        sensor::SBUS::Config sbus_config = {
+            .uart_num = UART_NUM_1,        
+            .uart_tx_pin = GPIO_NUM_NC,    
+            .uart_rx_pin = GPIO_NUM_18,    
+            .baud_rate = 100000            // SBUS runs at 100k baud
+        };
+        sensor::SBUS sbus(sbus_config);
+        ESP_ERROR_CHECK(sbus.init());
+        ESP_ERROR_CHECK(sbus.start());
     }
 
-    err = sbus.start();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start SBUS: %d", err);
-        return;
+
+    if (CONFIG_GPS_ENABLE) {
+        sensor::GPS::Config gps_config = {
+            .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
+            .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
+            .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
+            .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the defualt is 9600 (which doens't work). Which is why i wont add to kconfig (no im not just lazy)
+            .rx_buffer_size = 2048,
+            .tx_buffer_size = 1024,
+        };
+        sensor::GPS gps(gps_config);
+        ESP_ERROR_CHECK(gps.init());
+        ESP_ERROR_CHECK(gps.start());
     }
 
-    // << SBUS 
 
-    // GPS >>
-    sensor::GPS::Config gps_config = {
-        .uart_num = UART_NUM_2,        // Using UART1
-        .uart_tx_pin = GPIO_NUM_7,    // Adjust according to your wiring
-        .uart_rx_pin = GPIO_NUM_15,    // Adjust according to your wiring
-        .baud_rate = 57600,            // SBUS runs at 100k baud
-        .rx_buffer_size = 2048,
-        .tx_buffer_size = 1024,
+    if (CONFIG_IMU_ENABLE) {
+        sensor::IMU::Config imu_config = {
+            .spi_host = SPI2_HOST,
+            .spi_miso_pin = CONFIG_IMU_SPI_MISO,
+            .spi_mosi_pin = CONFIG_IMU_SPI_MOSI,
+            .spi_sck_pin = CONFIG_IMU_SPI_CLK,
+            .spi_cs_pin = CONFIG_IMU_SPI_CS,
+        };
+        sensor::IMU imu(imu_config);
+        ESP_ERROR_CHECK(imu.init());
+        ESP_ERROR_CHECK(imu.start());
+    }
+    
+    // Configure the steering servo
+    Servo::Config servo_config = {
+        .gpio_num = static_cast<gpio_num_t>(CONFIG_SERVO_OUTPUT_GPIO),  
+        .min_pulse_width_us = static_cast<int>(CONFIG_SERVO_MIN_PULSE_WIDTH_US),  
+        .max_pulse_width_us = static_cast<int>(CONFIG_SERVO_MAX_PULSE_WIDTH_US),  
+        .freq_hz = static_cast<uint32_t>(CONFIG_SERVO_FREQUENCY_HZ)  
     };
 
-    sensor::GPS gps(gps_config);
-    err = gps.init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize GPS: %d", err);
-        return;
-    }
-
-    err = gps.start();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start GPS: %d", err);
-        return;
-    }
-
-    // << GPS 
-
-
-    // IMU >>
-    sensor::IMU::Config imu_config = {
-        .spi_host = SPI2_HOST,
-        .spi_miso_pin = 13,
-        .spi_mosi_pin = 11,
-        .spi_sck_pin = 12,
-        .spi_cs_pin = 10,
+    // Configure the vehicle dynamics controller
+    VehicleDynamicsController::Config vd_config = {
+        .steering_servo = servo_config,
+        .task_stack_size = 4096,
+        .task_priority = 5,
+        .task_period = pdMS_TO_TICKS(20)  // 50Hz
     };
 
-    sensor::IMU imu(imu_config);
-    err = imu.init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize IMU: %d", err);
-        return;
-    }
+    VehicleDynamicsController vd_controller(vd_config);
+    ESP_ERROR_CHECK(vd_controller.init());
+    ESP_ERROR_CHECK(vd_controller.start());
 
-    err = imu.start();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start IMU: %d", err);
-        return;
-    }
 
-    // << IMU 
-
-    // DataManager::Config dm_config = {
-    //     .task_period = pdMS_TO_TICKS(1000)
-    // };
-
-    // DataManager* dm = new DataManager(dm_config);
-    // ESP_ERROR_CHECK(dm->start());
 
     // Keep the main task alive
     while(1) {

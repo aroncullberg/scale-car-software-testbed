@@ -1,0 +1,36 @@
+menu "IMU Configuration"
+    config IMU_ENABLE
+        bool "Enable IMU"
+        default y
+        help 
+            Enable the IMU module
+
+    config IMU_SPI_CLK
+        int "SPI_CLK"
+        default 12
+        range 0 48
+        help
+            pin for the spi clock
+
+    config IMU_SPI_MISO
+        int "SPI_MISO"
+        default 13
+        range 0 48
+        help
+            pin for the spi miso (Master in slave out), also called ADO on the icm20948
+
+    config IMU_SPI_MOSI
+        int "SPI_MOSI"
+        default 11
+        range 0 48
+        help
+            pin for the spi MOSI (Master out slave in), also called, SDI(?) on the icm20948
+
+    config IMU_SPI_CS
+        int "SPI_CS"
+        default 10
+        range 0 48
+        help
+            pin for the spi chip select
+
+endmenu

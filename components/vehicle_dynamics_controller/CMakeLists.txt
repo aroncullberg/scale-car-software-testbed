@@ -7,5 +7,6 @@ idf_component_register(
         "driver"
         "freertos"
         "esp_common"
+        "servo"
         "data_pool"
 )

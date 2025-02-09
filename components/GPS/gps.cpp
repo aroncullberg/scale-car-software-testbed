@@ -201,10 +201,12 @@ void GPS::processGPSData() {
         data.time.seconds = tiny_gps_.time.second();
         data.time.milliseconds = tiny_gps_.time.centisecond() * 10;
 
-        // ESP_LOGI(TAG, "-----------------------------------");
-        // ESP_LOGI(TAG, "latitude: %" PRIu32, data.latitude);
-        // ESP_LOGI(TAG, "longitude: %" PRIu32, data.longitude);
-        // ESP_LOGI(TAG, "-----------------------------------");
+        ESP_LOGI(TAG, "-----------------------------------");
+        ESP_LOGI(TAG, "latitude: %" PRIu32, data.latitude);
+        ESP_LOGI(TAG, "longitude: %" PRIu32, data.longitude);
+        ESP_LOGI(TAG, "fix: %" PRIu8, data.quality.fix_type);
+        ESP_LOGI(TAG, "satellites: %" PRIu8, data.quality.satellites);
+        ESP_LOGI(TAG, "-----------------------------------");
 
         // Update vehicle data pool
         ::VehicleData::instance().updateGPS(data);

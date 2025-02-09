@@ -12,7 +12,9 @@ idf_component_register(
         "imu"
         "TelemetryManager"
         "dshot_controller"
+        "vehicle_dynamics_controller"
         "servo"
+        "nvs_flash"
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE 

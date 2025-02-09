@@ -1,0 +1,53 @@
+menu "DSHOT Configuration"
+    choice DSHOT_PROTOCOL
+        prompt "DSHOT Protocol Version"
+        default DSHOT300
+        help
+            Select DSHOT protocol version to use.
+
+        config DSHOT150
+            bool "DSHOT150 (150kbaud)"
+        config DSHOT300
+            bool "DSHOT300 (300kbaud)"
+        config DSHOT600
+            bool "DSHOT600 (600kbaud)"
+    endchoice
+
+    menu "Motor GPIO Configuration"
+        config MOTOR_FRONT_LEFT_GPIO
+            int "Front Left Motor GPIO"
+            range 0 48
+            default 4
+            help
+                GPIO number for front left motor control signal.
+
+        config MOTOR_FRONT_RIGHT_GPIO
+            int "Front Right Motor GPIO"
+            range 0 48
+            default 5
+            help
+                GPIO number for front right motor control signal.
+
+        config MOTOR_REAR_LEFT_GPIO
+            int "Rear Left Motor GPIO"
+            range 0 48
+            default 6
+            help
+                GPIO number for rear left motor control signal.
+
+        config MOTOR_REAR_RIGHT_GPIO
+            int "Rear Right Motor GPIO"
+            range 0 48
+            default 7
+            help
+                GPIO number for rear right motor control signal.
+    endmenu
+
+    config DSHOT_RMT_RESOLUTION_HZ
+        int "RMT Resolution (Hz)"
+        range 1000000 80000000
+        default 40000000
+        help
+            RMT peripheral resolution in Hz. Higher values give more precise timing.
+            Default is 40MHz which works well for all DSHOT protocols.
+endmenu

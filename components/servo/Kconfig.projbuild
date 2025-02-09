@@ -1,0 +1,32 @@
+menu "Servo Configuration"
+    config SERVO_OUTPUT_GPIO
+        int "Servo Output GPIO"
+        range 0 48
+        default 6
+        help
+            GPIO number for servo control signal.
+
+    config SERVO_MIN_PULSE_WIDTH_US
+        int "Minimum Pulse Width (us)"
+        range 500 2500
+        default 1000
+        help
+            Minimum pulse width in microseconds for servo control.
+            Typically around 1000us for most servos.
+
+    config SERVO_MAX_PULSE_WIDTH_US
+        int "Maximum Pulse Width (us)"
+        range 500 2500
+        default 2000
+        help
+            Maximum pulse width in microseconds for servo control.
+            Typically around 2000us for most servos.
+
+    config SERVO_FREQUENCY_HZ
+        int "PWM Frequency (Hz)"
+        range 50 333
+        default 50
+        help
+            PWM frequency for servo control.
+            Standard servos use 50Hz, unsure if digital servos differ.
+endmenu
