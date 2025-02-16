@@ -3,11 +3,16 @@ idf_component_register(
         "gps.cpp"
     INCLUDE_DIRS 
         "."
+        "tinygps-espidf/include"
+        "tinygps-espidf/TinyGPSPlus/src"
     REQUIRES         
         "driver"
         "freertos"
         "esp_common"
         "data_pool"
-        "tinygps-espidf"
         "shared"
 )
+
+add_subdirectory(tinygps-espidf)
+
+target_link_libraries(${COMPONENT_LIB} PRIVATE tinygps-espidf)
