@@ -6,7 +6,7 @@ menu "SBUS Configuration"
         help 
             Enable the SBUS component for input
 
-    # Task configuration
+            # Task configuration
     config SBUS_TASK_STACK_SIZE
         int "SBUS Task Stack Size"
         default 4096
@@ -41,7 +41,7 @@ menu "SBUS Configuration"
         help
             uart TX pin for the sbus receiver component
 
-    # Channel configuration
+            # Channel configuration
     menu "Channel Configuration"
         # Channel 0 (Throttle)
         menu "Channel 0 (Throttle)"
@@ -50,7 +50,7 @@ menu "SBUS Configuration"
                 default SBUS_CH0_SYMMETRIC
                 help 
                     Select the type of channel 0 (Throttle)
-                
+
                 config SBUS_CH0_SYMMETRIC
                     bool "Symmetric (-1 to 1)"
                 config SBUS_CH0_UNIPOLAR
@@ -65,7 +65,7 @@ menu "SBUS Configuration"
                 range 0 2047
                 help
                     Minimum raw value for channel 0
-    
+
             config SBUS_CH0_CENTER
                 int "Channel 0 Center Value"
                 default 992
@@ -73,7 +73,7 @@ menu "SBUS Configuration"
                 depends on SBUS_CH0_SYMMETRIC
                 help
                     Center raw value for channel 0 (only used for symmetric channels)
-    
+
             config SBUS_CH0_MAX
                 int "Channel 0 Maximum Value"
                 default 1811
@@ -89,7 +89,7 @@ menu "SBUS Configuration"
                 default SBUS_CH1_SYMMETRIC
                 help 
                     Select the type of channel 1 (Steering)
-                
+
                 config SBUS_CH1_SYMMETRIC
                     bool "Symmetric (-1 to 1)"
                 config SBUS_CH1_UNIPOLAR
