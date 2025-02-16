@@ -5,12 +5,20 @@
 #include "esp_err.h"
 #include "servo.h"
 #include "data_pool.h"
+#include "esc_driver.h"
+#include <memory>
 
 class VehicleDynamicsController {
 public:
     struct Config {
         // Servo configuration
         Servo::Config steering_servo;
+
+        // ESC driver configuration
+        EscDriver::Config esc_config;
+        
+        
+
         
         // Task configuration
         uint32_t task_stack_size{4096};
@@ -34,9 +42,13 @@ private:
     
     static void controllerTask(void* arg);
     esp_err_t updateSteering();
+    esp_err_t updateThrottle();
+    esp_err_t initializeMotors();  // New method for motor initialization
+
 
     Config config_;
     Servo steering_servo_;
+    EscDriver esc_driver_;      // Direct member instead of pointer
     TaskHandle_t task_handle_{nullptr};
     bool is_running_{false};
 };

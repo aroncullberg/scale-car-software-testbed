@@ -20,9 +20,14 @@
     "streambuf": "cpp",
     "tuple": "cpp",
     "*.inc": "cpp",
-    "algorithm": "cpp"
+    "algorithm": "cpp",
+    "cstdint": "cpp",
+    "cmath": "cpp",
+    "unordered_map": "cpp",
+    "numeric": "cpp"
   },
     "C_Cpp.autocomplete": "default",
     "C_Cpp.suggestSnippets": true,
     "C_Cpp.errorSquiggles": "enabled",
+    "idf.portWin": "COM11",
 }

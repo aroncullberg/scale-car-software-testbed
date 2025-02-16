@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS 
-        "dshot.cpp"
+        "esc_driver.cpp"
         "dshot_esc_encoder.c"
     INCLUDE_DIRS 
         "."

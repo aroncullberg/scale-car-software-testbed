@@ -165,7 +165,7 @@ void GPS::gpsTask(void* parameters) {
 
 void GPS::processGPSData() {
     if (tiny_gps_.location.isValid() && tiny_gps_.location.isUpdated()) {
-        GPSData data;
+        GpsData data;
         
         // Position data (unchanged)
         data.latitude = tiny_gps_.location.lat() * 10000000;  // Convert to fixed point
@@ -175,7 +175,7 @@ void GPS::processGPSData() {
         // Speed data (new)
         if (tiny_gps_.speed.isValid()) {
             // Convert from knots to m/s and store as mm/s for fixed point
-            data.speed_mmps = tiny_gps_.speed.mps() * 1000;  // Need to add this to GPSData struct
+            data.speed_mmps = tiny_gps_.speed.mps() * 1000;  // Need to add this to GpsData struct
             data.ground_course = tiny_gps_.course.deg() * 100; // Store as centidegrees
             data.speed_valid = true;
         } else {

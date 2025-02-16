@@ -5,11 +5,13 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "esp_err.h"
+#include "sensor_types.h"
+#include "system_types.h"
 
 namespace sensor {
     struct ImuData;
-    struct GPSData;
-    struct SbusData;
+    struct GpsData;
+    // struct SbusData;
 }
 
 namespace telemetry {
@@ -47,6 +49,7 @@ public:
         SENSOR_GPS = 0x04,
         SENSOR_SBUS = 0x05,
         HEARTBEAT = 0x06,
+        SYSTEM_STATS = 0x07,
     };
     
     
@@ -61,8 +64,9 @@ public:
     esp_err_t stop();
 
     esp_err_t queueSensorData(const sensor::ImuData& data);
-    esp_err_t queueSensorData(const sensor::GPSData& data);
+    esp_err_t queueSensorData(const sensor::GpsData& data);
     esp_err_t queueSensorData(const sensor::SbusData& data);
+    esp_err_t queueSystemStats(const SystemStats& stats);
     esp_err_t queueTextMessage(const char* msg, uint8_t severity = 0);
 
 private:

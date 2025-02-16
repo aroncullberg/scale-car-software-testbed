@@ -12,4 +12,6 @@ idf_component_register(
         "imu"
         "SBUS"
         "GPS"
+        "shared"
+        "SystemMonitor"
 )

@@ -3,6 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "data_pool.h"
+#include <cmath>
 
 static const char* TAG = "IMU";
 

@@ -7,4 +7,5 @@ idf_component_register(
         "SBUS"
         "imu"
         "GPS"
+        "shared"
 )

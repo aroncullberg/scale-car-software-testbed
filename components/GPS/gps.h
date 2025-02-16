@@ -7,50 +7,12 @@
 #include "freertos/task.h"
 #include "TinyGPS++.h"
 
+#include "sensor_types.h"
+
 #define MATCH 0
 
 namespace sensor {
 
-struct GPSData {
-    // Position data (unchanged)
-    int32_t latitude{0};    // Degrees * 10^7
-    int32_t longitude{0};   // Degrees * 10^7
-    int32_t altitude_mm{0}; // Altitude in millimeters
-
-    // Speed data (new)
-    uint32_t speed_mmps{0};    // Speed in millimeters per second
-    uint16_t ground_course{0}; // Course in centidegrees (0-36000)
-    bool speed_valid{false};   // Indicates if speed data is valid
-
-    // Quality data (unchanged)
-    struct {
-        uint8_t fix_type{0};      
-        uint8_t satellites{0};     
-        uint8_t satellites_used{0};
-        uint16_t hdop{0};         
-    } quality;
-
-    // Status flags (unchanged)
-    union {
-        uint8_t flags{0};
-        struct {
-            uint8_t valid_fix : 1;    
-            uint8_t north_south : 1;  
-            uint8_t east_west : 1;    
-            uint8_t reserved : 5;     
-        } bits;
-    } status;
-
-    // UTC time (unchanged)
-    struct {
-        uint8_t hours{0};
-        uint8_t minutes{0};
-        uint8_t seconds{0};
-        uint16_t milliseconds{0};
-    } time;
-
-    GPSData() = default;
-};
 class GPS {
 public:
     struct Config {
@@ -82,7 +44,7 @@ private:
 
     TinyGPSPlus tiny_gps_;
     Config config_t;
-    GPSData current_data{}; // TODO: rename to current_data_
+    GpsData current_data{}; // TODO: rename to current_data_
 
     bool is_running{false};
 };

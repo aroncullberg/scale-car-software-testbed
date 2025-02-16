@@ -8,4 +8,5 @@ idf_component_register(
         "esp_common"
         "data_pool"
         "freertos"
+        "shared"
 )

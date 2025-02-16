@@ -1,5 +1,4 @@
 menu "SBUS Configuration"
-
     # Enable SBUS
     config SBUS_ENABLE
         bool "Enable SBUS"
@@ -20,6 +19,27 @@ menu "SBUS Configuration"
         range 0 25
         help
             Priority of the SBUS processing task
+
+    config SBUS_UART_NUM
+        int "SBUS UART"
+        default 1
+        range 0 2
+        help
+            Which uart is the sbus receiver is connected to
+
+    config SBUS_UART_RX
+        int "RX Pin"
+        default 18
+        range 0 48
+        help
+            uart rx pin for the sbus receiver component
+
+    config SBUS_UART_TX
+        int "TX Pin"
+        default 17
+        range 0 48
+        help
+            uart TX pin for the sbus receiver component
 
     # Channel configuration
     menu "Channel Configuration"

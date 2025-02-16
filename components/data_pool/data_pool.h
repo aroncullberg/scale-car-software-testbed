@@ -2,9 +2,10 @@
 
 #include <atomic>
 
-#include "SBUS.h"
-#include "gps.h"
+// #include "SBUS.h"
+// #include "gps.h"
 #include "imu.h"
+#include "sensor_types.h"
 
 class VehicleData {
     public:
@@ -16,12 +17,12 @@ class VehicleData {
 
     // thread safe (i think since only one task will call it?) update methods
     void updateSBUS(const sensor::SbusData& data);
-    void updateGPS(const sensor::GPSData& data);
+    void updateGPS(const sensor::GpsData& data);
     void updateIMU(const sensor::ImuData& data);
 
     // Unsure if this is threadsafe, should be fine since its read and not write(?)
     sensor::SbusData getSbus() const;
-    sensor::GPSData getGPS() const;
+    sensor::GpsData getGPS() const;
     sensor::ImuData getImu() const;
 
     uint32_t getSbusTimestamp() const {return sbus_timestamp_.load() ; }
@@ -38,7 +39,7 @@ class VehicleData {
     VehicleData& operator =(const VehicleData&) = delete;
 
     sensor::SbusData sbus_{};
-    sensor::GPSData gps_{};
+    sensor::GpsData gps_{};
     sensor::ImuData imu_{};
 
     std::atomic<uint32_t> sbus_timestamp_{0};

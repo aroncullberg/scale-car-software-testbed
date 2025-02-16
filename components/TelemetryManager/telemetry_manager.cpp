@@ -8,10 +8,10 @@
 #include "esp_now.h"
 #include "nvs_flash.h"
 #include "inttypes.h"
-#include "imu.h"
-#include "gps.h"
-#include "sbus.h"
-
+#include "system_monitor.h"
+// #include "imu.h"
+// #include "gps.h"
+// #include "sbus.h"
 
 namespace telemetry {
     
@@ -26,9 +26,10 @@ struct TelemetryQueueItem{
     uint32_t timestamp;
     union PacketData {
         sensor::ImuData imu;
-        sensor::GPSData gps;
+        sensor::GpsData gps;
         sensor::SbusData sbus;
         TextMessageData text;
+        CompactSystemStats compact_stats;
         PacketData() {} // union constructor fuckery
     } data;
 };
@@ -181,7 +182,7 @@ esp_err_t TelemetryManager::queueSensorData(const sensor::ImuData& data) {
     return ESP_OK;
 }
 
-esp_err_t TelemetryManager::queueSensorData(const sensor::GPSData& data) {
+esp_err_t TelemetryManager::queueSensorData(const sensor::GpsData& data) {
     if (!telemetry_queue_) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -216,6 +217,50 @@ esp_err_t TelemetryManager::queueSensorData(const sensor::SbusData& data) {
     }
     return ESP_OK;
 }
+
+
+esp_err_t TelemetryManager::queueSystemStats(const SystemStats& stats) {
+    if (!telemetry_queue_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // Convert full stats to compact format
+    CompactSystemStats compact{
+        .free_heap_size = stats.free_heap_size,
+        .min_free_heap = stats.min_free_heap,
+        .heap_fragmentation = stats.heap_fragmentation,
+        .cpu_frequency_mhz = stats.cpu_frequency_mhz,
+        .cpu_temperature_c = stats.cpu_temperature_c,
+        .cpu_usage_percent = stats.cpu_usage_percent,
+        .task_count = stats.task_count,
+        .max_task_watermark = 0,  // TODO: 
+        .wifi_rssi = stats.wifi_rssi,
+        .uptime_seconds = stats.uptime_seconds,
+        .loop_time_us = stats.loop_time_us
+    };
+
+    // Find highest watermark across all tasks
+    for (uint8_t i = 0; i < stats.task_count && i < 16; i++) {
+        if (stats.tasks[i].stack_high_water_mark > compact.max_task_watermark) {
+            compact.max_task_watermark = stats.tasks[i].stack_high_water_mark;
+        }
+    }
+
+    TelemetryQueueItem item{
+        .type = PacketType::SYSTEM_STATS,
+        .timestamp = xTaskGetTickCount()
+    };
+    
+    // Copy compact stats into the union
+    memcpy(&item.data, &compact, sizeof(CompactSystemStats));
+
+    if (xQueueSendToBack(telemetry_queue_, &item, 0) != pdPASS) {
+        ESP_LOGW(TAG, "Queue full, system stats dropped");
+        return ESP_ERR_NO_MEM;
+    }
+    return ESP_OK;
+}
+
 
 esp_err_t TelemetryManager::queueTextMessage(const char* msg, uint8_t severity) {
     if (!telemetry_queue_ || !msg) {
@@ -278,13 +323,13 @@ void TelemetryManager::telemetryTask(void* params) {
                         break;
 
                     case PacketType::SENSOR_SBUS:
-                        ESP_LOGI(TAG, "SBUS Data - Ch1:%.2f Ch2:%.2f Ch3:%.2f "
-                            "Valid:%d Loss:%u%%",
-                            item.data.sbus.channels[0],
-                            item.data.sbus.channels[1],
-                            item.data.sbus.channels[2],
-                            item.data.sbus.quality.valid_signal,
-                            item.data.sbus.quality.frame_loss_percent);
+                        // ESP_LOGI(TAG, "SBUS Data - Ch1:%.2f Ch2:%.2f Ch3:%.2f "
+                        //     "Valid:%d Loss:%u%%",
+                        //     item.data.sbus.channels[0],
+                        //     item.data.sbus.channels[1],
+                        //     item.data.sbus.channels[2],
+                        //     item.data.sbus.quality.valid_signal,
+                        //     item.data.sbus.quality.frame_loss_percent);
                         break;
 
                     case PacketType::TEXT:
@@ -297,6 +342,16 @@ void TelemetryManager::telemetryTask(void* params) {
                         ESP_LOGD(TAG, "Heartbeat packet");
                         break;
 
+                    case PacketType::SYSTEM_STATS:
+                        ESP_LOGI(TAG, "System Stats - Free Heap: %lu, CPU: %.1f MHz (%u%%), Tasks: %u", 
+                            item.data.compact_stats.free_heap_size,
+                            item.data.compact_stats.cpu_frequency_mhz,
+                            item.data.compact_stats.cpu_usage_percent,
+                            item.data.compact_stats.task_count);
+                        break;
+                    
+                    
+
                     default:
                         ESP_LOGW(TAG, "Unknown packet type: %u", 
                             static_cast<unsigned>(item.type));
@@ -305,6 +360,7 @@ void TelemetryManager::telemetryTask(void* params) {
             }
 
             if (manager->wirelessLogging()) {
+                
                 PacketHeader header{
                     .magic = MAGIC_BYTE,
                     .type = static_cast<uint8_t>(item.type),
@@ -332,7 +388,9 @@ void TelemetryManager::telemetryTask(void* params) {
 void TelemetryManager::dataFetcherTask(void* params) {
     auto* manager = static_cast<TelemetryManager*>(params);
     TickType_t last_wake_time = xTaskGetTickCount();
-    
+    TickType_t last_stats_time = xTaskGetTickCount();
+
+    const TickType_t STATS_UPDATE_PERIOD = pdMS_TO_TICKS(1000);
 
     while (true) {
         // get data from Vehicle singleton
@@ -365,6 +423,15 @@ void TelemetryManager::dataFetcherTask(void* params) {
         if (current_time - vehicle_data.getSbusTimestamp() < pdMS_TO_TICKS(100)) {
             manager->queueSensorData(vehicle_data.getSbus());
         }
+
+        // TODO: Make it not borken
+        // if ((current_time - last_stats_time) >= STATS_UPDATE_PERIOD) {
+        //     // SystemStats stats;
+        //     SystemStats stats = SystemMonitor::instance().getStats();
+        //     manager->queueSystemStats(stats);
+        //     last_stats_time = current_time;
+        // }
+
 
         vTaskDelayUntil(&last_wake_time, manager->config_.fetcher_period);
     }

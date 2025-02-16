@@ -4,55 +4,20 @@
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_err.h"
+#include "data_types.h"
+#include "sensor_types.h"
+// #include "system_types.h"
+// #include "telemetry_types.h"
 
 namespace sensor {
-
-enum class SbusChannelType : uint8_t {
-    SYMMETRIC = 0,      // -1 to 1 (steering)
-    UNIPOLAR = 1,       // 0 to 1 (throttle)
-    BINARY = 2          // Switch
-};
-
-enum class SbusChannel : uint8_t {
-    THROTTLE = 0,
-    STEERING = 1,
-    AUX1 = 2,
-    AUX2 = 3,
-    AUX3 = 4,
-    AUX4 = 5,
-    AUX5 = 6,
-    AUX6 = 7,
-    AUX7 = 8,
-    AUX8 = 9,
-    AUX9 = 10,
-    AUX10 = 11,
-    AUX11 = 12,
-    AUX12 = 13,
-    AUX13 = 14,
-    AUX14 = 15,
-    CHANNEL_COUNT = 16
-};
 
 struct SbusChannelConfig {
     SbusChannelType type;
     uint16_t min_raw;
-    uint16_t center_raw;  // Only used for SYMMETRIC
+    uint16_t center_raw;  // NOTE: Only used for SYMMETRIC
     uint16_t max_raw;
 };
 
-// Quality metrics structure
-struct SbusQuality {
-    uint8_t frame_loss_percent;
-    uint32_t error_count;
-    float frame_interval_ms;
-    bool valid_signal;
-};
-
-// Main SBUS data structure
-struct SbusData {
-    float channels[16];
-    struct SbusQuality quality;
-};
 
 class SBUS {
     public:

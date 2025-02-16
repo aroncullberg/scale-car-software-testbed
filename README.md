@@ -4,6 +4,10 @@
 - Diagrams showing data flow in program
 - Section outlining how to create new components and stuff, like if you add something to sensor_tasks you need to add in cmakelists stuff. 
 
+List of things that have wasted most time so far
+Not realizing i spent 4h trying to debug why a file didnt work when i had typed SRC instead of SRCS in the cmakelists.txt so the file didn't even copmile.
+Trying to get claude/r1/gpt to fix the dshot driver bugs isntead of reading the fucking manual. Read the manual its faster. Also never use more than 48 symbols for rmt channels if you want many fun.
+
 ```mermaid
 flowchart TB
     subgraph Vehicle["Vehicle MCU (ESP32-S3)"]
@@ -88,3 +92,5 @@ flowchart TB
     class DataPool,MsgQueue datastore;
     class ICM,TinyGPS,SBUSDriver,DShotEnc,ServoDrv component;
     ```
+
+

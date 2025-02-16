@@ -161,6 +161,7 @@ void SBUS::sbusTask(void* parameters) {
 }
 
 void SBUS::processFrame(const uint8_t* frame, size_t len) {
+
     if (len != FRAME_SIZE) {
         ESP_LOGW(TAG, "invalid frame size %d", len);
         current_data_.quality.error_count++;
@@ -171,6 +172,8 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
     int byte_index = 1; //skip start byte
     int bit_index = 0;
 
+    
+    
     for (int ch = 0; ch < 16; ch++) {
         channels[ch] = 0;
         for (int bit = 0; bit < 11; bit++) {
@@ -185,6 +188,9 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
             }
         }
     }
+    
+    // ESP_LOGI(TAG, "Raw channel values:");
+    // ESP_LOGI(TAG, "Ch%d: %u", 1, channels[1]);
 
     updateChannelValues(channels);
 }
@@ -423,6 +429,10 @@ void SBUS::updateChannelValues(const uint16_t* raw_channels) {
     for (int i = 0; i < 16; i++) {
         current_data_.channels[i] = scaleChannelValue(raw_channels[i], channel_configs[i]);
     }
+
+    // ESP_LOGI(TAG, "scaled channel values:");
+    // ESP_LOGI(TAG, "Ch%d: %u", 1, raw_channels[1]);
+    // ESP_LOGI(TAG, "-------------------------------");
     
     // Update signal quality
     monitorSignalQuality();
@@ -433,20 +443,21 @@ void SBUS::updateChannelValues(const uint16_t* raw_channels) {
 float SBUS::scaleChannelValue(uint16_t raw_value, const SbusChannelConfig& config) {
     float scaled_value = 0.0f;
 
-        switch (config.type) {
+    switch (config.type) {
         case SbusChannelType::SYMMETRIC:
             if (raw_value < config.center_raw) {
-                // scale from min to center -1 -> 0
-                scaled_value = -1.0f +
-                    (float)(raw_value - config.min_raw) /
+                // scale from min to center (-1 to 0)
+                scaled_value = 
+                    -1.0f * (float)(config.center_raw - raw_value) /
                     (float)(config.center_raw - config.min_raw);
             } else {
-                // scale center to max 0 -> 1
+                // scale from center to max (0 to 1)
                 scaled_value = 
                     (float)(raw_value - config.center_raw) /
                     (float)(config.max_raw - config.center_raw);
             }
             break;
+
         case SbusChannelType::UNIPOLAR:
             // scale from min to max (0 to 1)
             scaled_value = 
@@ -465,7 +476,6 @@ float SBUS::scaleChannelValue(uint16_t raw_value, const SbusChannelConfig& confi
     if (scaled_value > 1.0f) scaled_value = 1.0f;
 
     return scaled_value;
-
 }
 
 void SBUS::monitorSignalQuality() {
