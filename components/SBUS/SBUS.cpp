@@ -4,7 +4,6 @@
 #include "freertos/task.h"
 #include "data_pool.h"
 
-static const char* TAG = "SBUS";
 
 namespace sensor {
 
@@ -21,7 +20,10 @@ SBUS::~SBUS() {
 esp_err_t SBUS::init() {
     ESP_LOGI(TAG, "initializing SBUS on UART%d (TX:%d, RX:%d)",
                     config_t.uart_num, config_t.uart_tx_pin, config_t.uart_rx_pin);
-    return configureUART();
+
+    ESP_ERROR_CHECK(configureUART());
+
+    return ESP_OK;
 }
 
 esp_err_t SBUS::configureUART() {
@@ -82,9 +84,9 @@ esp_err_t SBUS::start() {
     BaseType_t task_created = xTaskCreate(
         sbusTask,                           // task function
         "sbus_task",                        // task name
-        CONFIG_SBUS_TASK_STACK_SIZE,        // stack size (Kconfig)
+        4096,                               // stack
         this,                               // ???
-        CONFIG_SBUS_TASK_PRIORITY,          // Task priority (Kconfig)
+        5,                                  // Task priority 
         &task_handle_                       // self explanatory 
     );
 
@@ -167,18 +169,24 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
         current_data_.quality.error_count++;
         return;
     }
-    // SBUS channel data is packed across 22 bytes (11 bits/ch)
-    uint16_t channels[16] = {0};
-    int byte_index = 1; //skip start byte
-    int bit_index = 0;
 
+    if (CONFIG_SBUS_LOG_RAW_FRAMES) {
+        ESP_LOGI(TAG, "Frame: [%02X %02X %02X %02X %02X %02X %02X %02X ...]", 
+                 frame[0], frame[1], frame[2], frame[3],
+                 frame[4], frame[5], frame[6], frame[7]);
+    }
+
+    int byte_index = 1; // <- skip start byte
+    int bit_index = 0;
     
     
     for (int ch = 0; ch < 16; ch++) {
-        channels[ch] = 0;
+        uint16_t raw_value = 0;
+
+        // Extract the 11 bits for channel
         for (int bit = 0; bit < 11; bit++) {
             if (frame[byte_index] & (1 << bit_index)) {
-                channels[ch] |= (1 << bit);
+                raw_value |= (1 << bit);
             }
             
             bit_index++;
@@ -187,295 +195,33 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
                 byte_index++;
             }
         }
-    }
-    
-    // ESP_LOGI(TAG, "Raw channel values:");
-    // ESP_LOGI(TAG, "Ch%d: %u", 1, channels[1]);
 
-    updateChannelValues(channels);
-}
+        current_data_.channels[ch] = scaleChannelValue(
+            raw_value,
+            CHANNEL_CONFIGS[ch][MIN],
+            CHANNEL_CONFIGS[ch][MAX]
+        );
 
-
-void SBUS::updateChannelValues(const uint16_t* raw_channels) {
-        // SBUS values are 11-bit (0-2047)
-    static const SbusChannelConfig channel_configs[] = {
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH0_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH0_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH0_MIN,
-            // .center_raw = CONFIG_SBUS_CH0_CENTER,
-            .max_raw = CONFIG_SBUS_CH0_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH1_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH1_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH1_MIN,
-            .center_raw = CONFIG_SBUS_CH1_CENTER,
-            .max_raw = CONFIG_SBUS_CH1_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH2_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH2_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH2_MIN,
-            .center_raw = CONFIG_SBUS_CH2_CENTER,
-            .max_raw = CONFIG_SBUS_CH2_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH3_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH3_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH3_MIN,
-            .center_raw = CONFIG_SBUS_CH3_CENTER,
-            .max_raw = CONFIG_SBUS_CH3_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH4_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH4_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH4_MIN,
-            .center_raw = CONFIG_SBUS_CH4_CENTER,
-            .max_raw = CONFIG_SBUS_CH4_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH5_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH5_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH5_MIN,
-            .center_raw = CONFIG_SBUS_CH5_CENTER,
-            .max_raw = CONFIG_SBUS_CH5_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH6_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH6_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH6_MIN,
-            .center_raw = CONFIG_SBUS_CH6_CENTER,
-            .max_raw = CONFIG_SBUS_CH6_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH7_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH7_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH7_MIN,
-            .center_raw = CONFIG_SBUS_CH7_CENTER,
-            .max_raw = CONFIG_SBUS_CH7_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH8_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH8_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH8_MIN,
-            .center_raw = CONFIG_SBUS_CH8_CENTER,
-            .max_raw = CONFIG_SBUS_CH8_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH9_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH9_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH9_MIN,
-            .center_raw = CONFIG_SBUS_CH9_CENTER,
-            .max_raw = CONFIG_SBUS_CH9_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH10_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH10_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH10_MIN,
-            .center_raw = CONFIG_SBUS_CH10_CENTER,
-            .max_raw = CONFIG_SBUS_CH10_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH11_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH11_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH11_MIN,
-            .center_raw = CONFIG_SBUS_CH11_CENTER,
-            .max_raw = CONFIG_SBUS_CH11_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH12_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH12_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH12_MIN,
-            .center_raw = CONFIG_SBUS_CH12_CENTER,
-            .max_raw = CONFIG_SBUS_CH12_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH13_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH13_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH13_MIN,
-            .center_raw = CONFIG_SBUS_CH13_CENTER,
-            .max_raw = CONFIG_SBUS_CH13_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH14_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH14_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH14_MIN,
-            .center_raw = CONFIG_SBUS_CH14_CENTER,
-            .max_raw = CONFIG_SBUS_CH14_MAX
-        },
-        {
-            .type =
-            #if defined(CONFIG_SBUS_CH15_SYMMETRIC)
-                SbusChannelType::SYMMETRIC
-            #elif defined(CONFIG_SBUS_CH15_UNIPOLAR)
-                SbusChannelType::UNIPOLAR
-            #else
-                SbusChannelType::BINARY
-            #endif
-            ,
-            .min_raw = CONFIG_SBUS_CH15_MIN,
-            .center_raw = CONFIG_SBUS_CH15_CENTER,
-            .max_raw = CONFIG_SBUS_CH15_MAX
-        },
-    };
-
-    // scale each channel according to config
-    for (int i = 0; i < 16; i++) {
-        current_data_.channels[i] = scaleChannelValue(raw_channels[i], channel_configs[i]);
+        if (CONFIG_SBUS_DEBUG_LOGGING) {
+            ESP_LOGI(TAG, "CH%d: Raw=%4d, Scaled=%4d", 
+                    ch, 
+                    raw_value, 
+                    current_data_.channels[ch]);
+        }
     }
 
-    // ESP_LOGI(TAG, "scaled channel values:");
-    // ESP_LOGI(TAG, "Ch%d: %u", 1, raw_channels[1]);
-    // ESP_LOGI(TAG, "-------------------------------");
-    
-    // Update signal quality
+
     monitorSignalQuality();
-
     VehicleData::instance().updateSBUS(current_data_);
 }
 
-float SBUS::scaleChannelValue(uint16_t raw_value, const SbusChannelConfig& config) {
-    float scaled_value = 0.0f;
 
-    switch (config.type) {
-        case SbusChannelType::SYMMETRIC:
-            if (raw_value < config.center_raw) {
-                // scale from min to center (-1 to 0)
-                scaled_value = 
-                    -1.0f * (float)(config.center_raw - raw_value) /
-                    (float)(config.center_raw - config.min_raw);
-            } else {
-                // scale from center to max (0 to 1)
-                scaled_value = 
-                    (float)(raw_value - config.center_raw) /
-                    (float)(config.max_raw - config.center_raw);
-            }
-            break;
-
-        case SbusChannelType::UNIPOLAR:
-            // scale from min to max (0 to 1)
-            scaled_value = 
-                (float)(raw_value - config.min_raw) /
-                (float)(config.max_raw - config.min_raw);
-            break;
-        case SbusChannelType::BINARY:
-            // threshold at midpoint between min and max
-            uint16_t treshhold = (config.min_raw + config.max_raw) / 2;
-            scaled_value = (raw_value >= treshhold) ? 1.0f : 0.0f;
-            break;
-    }
-
-    // clamp values
-    if (scaled_value < -1.0f) scaled_value = -1.0f;
-    if (scaled_value > 1.0f) scaled_value = 1.0f;
-
-    return scaled_value;
+uint16_t SBUS::scaleChannelValue(uint16_t raw_value, uint16_t min_raw, uint16_t max_raw) {
+    // if (raw_value < min_raw) raw_value = min_raw;
+    // if (raw_value > max_raw) raw_value = max_raw;
+    
+    // Scale to 1000-2000 range
+    return 1000 + ((raw_value - min_raw) * 1000) / (max_raw - min_raw);
 }
 
 void SBUS::monitorSignalQuality() {
@@ -502,32 +248,32 @@ void SBUS::monitorSignalQuality() {
     current_data_.quality.frame_loss_percent = (uint8_t)(100-(good_frames * 100 / WINDOW_SIZE));
 }
 
-const char* SBUS::getChannelName(SbusChannel channel) {
-    static const char* channel_names[] = {
-        "Throttle",
-        "Steering",
-        "AUX1",
-        "AUX2",
-        "AUX3",
-        "AUX4",
-        "AUX5",
-        "AUX6",
-        "AUX7",
-        "AUX8",
-        "AUX9",
-        "AUX10",
-        "AUX11",
-        "AUX12",
-        "AUX13",
-        "AUX14"
-    };
+// const char* SBUS::getChannelName(SbusChannel channel) {
+//     static const char* channel_names[] = {
+//         "Throttle",
+//         "Steering",
+//         "AUX1",
+//         "AUX2",
+//         "AUX3",
+//         "AUX4",
+//         "AUX5",
+//         "AUX6",
+//         "AUX7",
+//         "AUX8",
+//         "AUX9",
+//         "AUX10",
+//         "AUX11",
+//         "AUX12",
+//         "AUX13",
+//         "AUX14"
+//     };
 
-    if (static_cast<uint8_t>(channel) >= static_cast<uint8_t>(SbusChannel::CHANNEL_COUNT)) {
-        return "Invalid";
-    }
+//     if (static_cast<uint8_t>(channel) >= static_cast<uint8_t>(SbusChannel::CHANNEL_COUNT)) {
+//         return "Invalid";
+//     }
 
-    return channel_names[static_cast<uint8_t>(channel)];
-}
+//     return channel_names[static_cast<uint8_t>(channel)];
+// }
 
 
 }

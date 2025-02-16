@@ -33,9 +33,8 @@ extern "C" void app_main(void) {
         .fetcher_stack_size = 4096
     };
 
-    // Initialize and start telemetry manager
-    // ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().init(telemetry_config));
-    // ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().start());
+    ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().init(telemetry_config));
+    ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().start());
 
     if (CONFIG_SBUS_ENABLE) {
         sensor::SBUS::Config sbus_config = {
@@ -50,33 +49,33 @@ extern "C" void app_main(void) {
     }
 
 
-    // if (CONFIG_GPS_ENABLE) {
-    //     sensor::GPS::Config gps_config = {
-    //         .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
-    //         .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
-    //         .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
-    //         .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the defualt is 9600 (which doens't work). Which is why i wont add to kconfig (no im not just lazy)
-    //         .rx_buffer_size = 2048,
-    //         .tx_buffer_size = 1024,
-    //     };
-    //     static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
-    //     ESP_ERROR_CHECK(gps.init());
-    //     ESP_ERROR_CHECK(gps.start());
-    // }
+    if (CONFIG_GPS_ENABLE) {
+        sensor::GPS::Config gps_config = {
+            .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
+            .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
+            .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
+            .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the defualt is 9600 (which doens't work). Which is why i wont add to kconfig (no im not just lazy)
+            .rx_buffer_size = 2048,
+            .tx_buffer_size = 1024,
+        };
+        static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
+        ESP_ERROR_CHECK(gps.init());
+        ESP_ERROR_CHECK(gps.start());
+    }
 
 
-    // if (CONFIG_IMU_ENABLE) {
-    //     sensor::IMU::Config imu_config = {
-    //         .spi_host = SPI2_HOST,
-    //         .spi_miso_pin = CONFIG_IMU_SPI_MISO,
-    //         .spi_mosi_pin = CONFIG_IMU_SPI_MOSI,
-    //         .spi_sck_pin = CONFIG_IMU_SPI_CLK,
-    //         .spi_cs_pin = CONFIG_IMU_SPI_CS,
-    //     };
-    //     static sensor::IMU imu(imu_config);
-    //     ESP_ERROR_CHECK(imu.init());
-    //     ESP_ERROR_CHECK(imu.start());
-    // }
+    if (CONFIG_IMU_ENABLE) {
+        sensor::IMU::Config imu_config = {
+            .spi_host = SPI2_HOST,
+            .spi_miso_pin = CONFIG_IMU_SPI_MISO,
+            .spi_mosi_pin = CONFIG_IMU_SPI_MOSI,
+            .spi_sck_pin = CONFIG_IMU_SPI_CLK,
+            .spi_cs_pin = CONFIG_IMU_SPI_CS,
+        };
+        static sensor::IMU imu(imu_config);
+        ESP_ERROR_CHECK(imu.init());
+        ESP_ERROR_CHECK(imu.start());
+    }
     
     // Configure the steering servo
     Servo::Config servo_config = {
@@ -87,25 +86,15 @@ extern "C" void app_main(void) {
     };
 
     // UPDATE: New ESC driver configuration
-    EscDriver::Config esc_config = {
-        .resolution_hz = 40000000,      // Must match your ESC's requirements
-        .baud_rate = 300000,            // DSHOT300
-        .post_delay_us = 50,
-        .gpio_nums = {
-            static_cast<gpio_num_t>(38),
-            static_cast<gpio_num_t>(39),
-            static_cast<gpio_num_t>(40),
-            static_cast<gpio_num_t>(41)
-        },
-        .mem_block_symbols = 48
-    };
-    
-    
+    EscDriver::Config esc_config;
+    esc_config.motor_pins[EscDriver::MotorPosition::FRONT_RIGHT] = static_cast<gpio_num_t>(38);
+    esc_config.motor_pins[EscDriver::MotorPosition::FRONT_LEFT] = static_cast<gpio_num_t>(39);
+    esc_config.motor_pins[EscDriver::MotorPosition::REAR_LEFT] = static_cast<gpio_num_t>(40);
+    esc_config.motor_pins[EscDriver::MotorPosition::REAR_RIGHT] = static_cast<gpio_num_t>(41);
 
-    // UPDATE: Modified vehicle dynamics configuration
     VehicleDynamicsController::Config vd_config = {
         .steering_servo = servo_config,
-        .esc_config = esc_config,       // Now uses EscDriver config instead of DshotConfig
+        .esc_config = esc_config,       
         .task_stack_size = 4096,
         .task_priority = 5,
         .task_period = pdMS_TO_TICKS(20)
@@ -116,9 +105,6 @@ extern "C" void app_main(void) {
     ESP_ERROR_CHECK(vd_controller.init());
     ESP_ERROR_CHECK(vd_controller.start());
 
-
-
-    // Keep the main task alive
     while(1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

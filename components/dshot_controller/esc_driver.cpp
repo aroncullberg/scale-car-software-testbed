@@ -2,11 +2,11 @@
 #include "esc_driver.h"
 #include "esp_log.h"
 #include "esp_check.h"
+#include "freertos/FreeRTOS.h"
 
-static const char* TAG = "ESC Driver";
 
 EscDriver::~EscDriver() {
-    for(auto& motor : motors_) {
+    for(auto& [position, motor] : motors_) {
         if(motor.channel) {
             rmt_disable(motor.channel);
             rmt_del_channel(motor.channel);
@@ -17,26 +17,30 @@ EscDriver::~EscDriver() {
     }
 }
 
-esp_err_t EscDriver::initialize(const Config& config) {
+
+esp_err_t EscDriver::init(const Config& config) {
     ESP_RETURN_ON_FALSE(!initialized_, ESP_ERR_INVALID_STATE, TAG, "Already initialized");
-    ESP_RETURN_ON_FALSE(config.gpio_nums.size() <= 4, ESP_ERR_INVALID_ARG, TAG, "Max 4 ESCs supported");
+    ESP_RETURN_ON_FALSE(config.motor_pins.size() <= 4, ESP_ERR_INVALID_ARG, TAG, "Max 4 ESCs supported");
 
     config_ = config;
-    motors_.resize(config.gpio_nums.size());
 
-    for(size_t i = 0; i < config.gpio_nums.size(); ++i) {
+    for (const auto& [position, pin] : config.motor_pins) {
+        MotorControl& motor = motors_[position];
+
         ESP_RETURN_ON_ERROR(
-            create_rmt_channel(config.gpio_nums[i], &motors_[i].channel),
-            TAG, "Failed to create RMT channel for ESC %zu", i
+            create_rmt_channel(pin, &motor.channel),
+            TAG, "Failed to create RMT channel for motor position %d", static_cast<int>(position)
         );
-        
+
         ESP_RETURN_ON_ERROR(
-            create_encoder(&motors_[i].encoder),
-            TAG, "Failed to create encoder for ESC %zu", i
+            create_encoder(&motor.encoder),
+            TAG, "Failed to create encoder for motor position %d", static_cast<int>(position)
         );
     }
 
     initialized_ = true;
+
+    ESP_RETURN_ON_ERROR(arm_all(), TAG, "Failed to arm motors during initializtion");
     return ESP_OK;
 }
 
@@ -72,10 +76,10 @@ esp_err_t EscDriver::start() {
     ESP_RETURN_ON_FALSE(initialized_, ESP_ERR_INVALID_STATE, TAG, "Not initialized");
     ESP_RETURN_ON_FALSE(!started_, ESP_ERR_INVALID_STATE, TAG, "Already started");
 
-    for(size_t i = 0; i < motors_.size(); ++i) {
+    for (auto& [position, motor] : motors_) {
         ESP_RETURN_ON_ERROR(
-            rmt_enable(motors_[i].channel),
-            TAG, "Failed to enable RMT channel %zu", i
+            rmt_enable(motor.channel),
+            TAG, "Failed to enable RMT channel for motor position %d", static_cast<int>(position)
         );
     }
 
@@ -83,41 +87,52 @@ esp_err_t EscDriver::start() {
     return ESP_OK;
 }
 
-esp_err_t EscDriver::arm_motor(size_t motor_idx, bool arm) {
-    ESP_RETURN_ON_FALSE(motor_idx < motors_.size(), ESP_ERR_INVALID_ARG, TAG, "Invalid motor index");
-    
-    MotorControl& motor = motors_[motor_idx];
-    if(arm && !motor.armed) {
-        // Arm sequence: send zero throttle for initialization
+esp_err_t EscDriver::arm_all() {
+
+    for (auto& [position, motor] : motors_) {
+        dshot_esc_throttle_t frame = {
+            .throttle = 0,
+            .telemetry_req = false
+        };
+
+        rmt_transmit_config_t  transmit_config = {
+            .loop_count = -1,
+            .flags = {
+                .eot_level = 0,
+                .queue_nonblocking = false
+            }
+        };
+
         ESP_RETURN_ON_ERROR(
-            set_throttle(motor_idx, 0),
-            TAG, "Failed arm sequence for motor %zu", motor_idx
+            rmt_transmit(motor.channel, motor.encoder, &frame, sizeof(frame), &transmit_config),
+            TAG, "Failed to send arm signal to motor position %d", static_cast<int>(position)
         );
-        motor.armed = true;
-        ESP_LOGI(TAG, "Motor %zu armed", motor_idx);
-    } else if(!arm && motor.armed) {
-        // Disarm sequence: send zero throttle and mark disarmed
-        ESP_RETURN_ON_ERROR(
-            set_throttle(motor_idx, 0),
-            TAG, "Failed disarm sequence for motor %zu", motor_idx
-        );
-        motor.armed = false;
-        ESP_LOGI(TAG, "Motor %zu disarmed", motor_idx);
     }
+
+    vTaskDelay(pdMS_TO_TICKS(350));
+
+    armed_ = true;
+    ESP_LOGI(TAG, "All motors armed");
+
     return ESP_OK;
 }
 
-esp_err_t EscDriver::set_throttle(size_t motor_idx, uint16_t throttle, bool telemetry) {
-    ESP_RETURN_ON_FALSE(motor_idx < motors_.size(), ESP_ERR_INVALID_ARG, TAG, "Invalid motor index");
-    ESP_RETURN_ON_FALSE(throttle <= 1999, ESP_ERR_INVALID_ARG, TAG, "Throttle %hu exceeds DShot maximum (1999)", throttle);
+esp_err_t EscDriver::set_throttle(MotorPosition position, uint16_t input_throttle, bool telemetry) {
+    ESP_RETURN_ON_FALSE(initialized_ && started_, ESP_ERR_INVALID_STATE, TAG, "Driver not initialized or started");
+    ESP_RETURN_ON_FALSE(armed_, ESP_ERR_INVALID_STATE, TAG, "Motors not armed");
+    ESP_RETURN_ON_FALSE(input_throttle >= 1000 && input_throttle <= 2000, ESP_ERR_INVALID_ARG, 
+        TAG, "Input throttle %hu outside valid range (1000-2000)", input_throttle);
     
-    MotorControl& motor = motors_[motor_idx];
-    ESP_RETURN_ON_FALSE(throttle == 0 || motor.armed, 
-                      ESP_ERR_INVALID_STATE, TAG, 
-                      "Cannot set throttle %hu - motor %zu not armed", throttle, motor_idx);
-
+    auto it = motors_.find(position);
+    ESP_RETURN_ON_FALSE(it != motors_.end(), ESP_ERR_NOT_FOUND, TAG, "Motor position not found");
+    
+    // Scale from 1000-2000 to 48-2047
+    uint16_t normalized = input_throttle - 1000;
+    uint16_t dshot_throttle = 48 + (normalized * 1999) / 1000;
+    
+    MotorControl& motor = it->second;
     dshot_esc_throttle_t frame = {
-        .throttle = throttle,
+        .throttle = dshot_throttle,
         .telemetry_req = telemetry
     };
 
@@ -130,12 +145,61 @@ esp_err_t EscDriver::set_throttle(size_t motor_idx, uint16_t throttle, bool tele
     };
 
     // Reset channel to ensure immediate throttle update
-    ESP_RETURN_ON_ERROR(rmt_disable(motor.channel), TAG, "Failed to disable channel %zu", motor_idx);
-    ESP_RETURN_ON_ERROR(rmt_enable(motor.channel), TAG, "Failed to re-enable channel %zu", motor_idx);
+    ESP_RETURN_ON_ERROR(rmt_disable(motor.channel), TAG, "Failed to disable channel");
+    ESP_RETURN_ON_ERROR(rmt_enable(motor.channel), TAG, "Failed to re-enable channel");
 
     esp_err_t ret = rmt_transmit(motor.channel, motor.encoder, &frame, sizeof(frame), &transmit_config);
     if(ret == ESP_OK) {
-        motor.current_throttle = throttle;
+        motor.current_throttle = dshot_throttle;
     }
     return ret;
+}
+
+esp_err_t EscDriver::set_command(MotorPosition position, DshotCommand command, bool telemetry) {
+    ESP_RETURN_ON_FALSE(initialized_ && started_, ESP_ERR_INVALID_STATE, TAG, "Driver not initialized or started");
+    ESP_RETURN_ON_FALSE(armed_, ESP_ERR_INVALID_STATE, TAG, "Motors not armed");
+    
+    auto it = motors_.find(position);
+    ESP_RETURN_ON_FALSE(it != motors_.end(), ESP_ERR_NOT_FOUND, TAG, "Motor position not found");
+    
+    MotorControl& motor = it->second;
+    dshot_esc_throttle_t frame = {
+        .throttle = static_cast<uint16_t>(command),
+        .telemetry_req = telemetry
+    };
+
+    rmt_transmit_config_t transmit_config = {
+        .loop_count = -1,
+        .flags = {
+            .eot_level = 0,
+            .queue_nonblocking = false
+        }
+    };
+
+    // Reset channel to ensure immediate command update
+    ESP_RETURN_ON_ERROR(rmt_disable(motor.channel), TAG, "Failed to disable channel");
+    ESP_RETURN_ON_ERROR(rmt_enable(motor.channel), TAG, "Failed to re-enable channel");
+
+    return rmt_transmit(motor.channel, motor.encoder, &frame, sizeof(frame), &transmit_config);
+}
+
+esp_err_t EscDriver::set_all_commands(DshotCommand command, bool telemetry) {
+    for(const auto& [position, _] : motors_) {
+        ESP_RETURN_ON_ERROR(
+            set_command(position, command, telemetry),
+            TAG, "Failed to set command for motor position %d", static_cast<int>(position)
+        );
+    }
+    return ESP_OK;
+}
+
+
+esp_err_t EscDriver::set_all_throttles(uint16_t throttle, bool telemetry) {
+    for(const auto& [position, _] : motors_) {
+        ESP_RETURN_ON_ERROR(
+            set_throttle(position, throttle, telemetry),
+            TAG, "Failed to set throttle for motor position %d", static_cast<int>(position)
+        );
+    }
+    return ESP_OK;
 }

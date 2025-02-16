@@ -11,27 +11,15 @@ struct SensorQuality {
     float update_rate_hz{0.0f};    // Current update rate in Hz
 };
 
-/// @enum SbusChannelType
-/// @brief Defines the channel types for SBUS data.
-/// 
-/// Available channel types:
-/// - @b SYMMETRIC: Range: @c -1.0f to @c 1.0f
-/// - @b UNIPOLAR: Range: @c 0.0f to @c 1.0f
-/// - @b BINARY: Boolean value (@c true / @c false)
 enum class SbusChannelType : uint8_t {
-    /// @brief Range: -1.0f to 1.0f
     SYMMETRIC = 0,
-
-    /// @brief Range: 0.0f to 1.0f
-    
     UNIPOLAR = 1,
-    
-    /// @brief Boolean value
     BINARY = 2,
+    TRISTATE = 3,
+    NONE = 8,
 };
 
 
-/// @brief SBUS channel mapping
 enum class SbusChannel : uint8_t {
     THROTTLE = 0,
     STEERING = 1,
@@ -52,32 +40,16 @@ enum class SbusChannel : uint8_t {
     CHANNEL_COUNT = 16
 };
 
-/// @brief SBUS receiver data structure containing channel values and quality metrics
 struct SbusData {
-    /// @brief Array of scaled channel values. Range depends on SbusChannelType
-    float channels[16]{};
-
-    /// @brief Quality metrics for SBUS signal
+    uint16_t channels[16]{1500};
     struct {
-        /// @brief Percentage of lost frames (0-100)
         uint8_t frame_loss_percent{0};
-
-        /// @brief Cumulative count of communication errors
         uint32_t error_count{0};
-
-        /// @brief Time between frames in milliseconds
-        /// @todo Replace with integer microseconds for better performance
         float frame_interval_ms{0.0f};
-
-        /// @brief Indicates if the SBUS signal is currently valid
         bool valid_signal{false};
     } quality;
-
-    /// @brief Default constructor for zero-initialization
     SbusData() = default;
 };
-
-// NOTE: I cba doing doxygen comments for everything and i dislike how it looks in code. 
 
 
 struct GpsData {

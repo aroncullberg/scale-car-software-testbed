@@ -111,26 +111,19 @@ esp_err_t Servo::init() {
     return ESP_OK;
 }
 
-uint32_t Servo::calculateCompareValue(float position) const {
-    // ESP_LOGI("Servo", "%.3f", 
-    //         position);
-    // Clamp position between -1 and 1
-    position = std::max(-1.0f, std::min(1.0f, position));
+uint32_t Servo::calculateCompareValue(uint16_t position) const {
+    position = std::max(uint16_t(1000), std::min(uint16_t(2000), position));
     
-    // ESP_LOGI("Servo", "%.3f", 
-    //     position);
-    // Map -1 to 1 to pulse width range
-    float pulse_width = (position + 1.0f) / 2.0f * 
-        (config_.max_pulse_width_us - config_.min_pulse_width_us) + 
-        config_.min_pulse_width_us;
+    uint32_t normalized = position - 1000;
     
-    // ESP_LOGI("Servo", "%.3f -> %lu", 
-        // position, static_cast<uint32_t>(pulse_width));
-    return static_cast<uint32_t>(pulse_width);
+    uint32_t pulse_width = 
+        ((normalized * (config_.max_pulse_width_us - config_.min_pulse_width_us)) / 1000) 
+        + config_.min_pulse_width_us;
+    
+    return pulse_width;
 }
 
-esp_err_t Servo::setPosition(float position) {
-    // calculateCompareValue(position);
+esp_err_t Servo::setPosition(uint16_t position) {
     // return ESP_OK;
     return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
 }

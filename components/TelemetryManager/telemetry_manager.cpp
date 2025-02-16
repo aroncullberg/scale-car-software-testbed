@@ -322,16 +322,6 @@ void TelemetryManager::telemetryTask(void* params) {
                             item.data.imu.gyro_z);
                         break;
 
-                    case PacketType::SENSOR_SBUS:
-                        // ESP_LOGI(TAG, "SBUS Data - Ch1:%.2f Ch2:%.2f Ch3:%.2f "
-                        //     "Valid:%d Loss:%u%%",
-                        //     item.data.sbus.channels[0],
-                        //     item.data.sbus.channels[1],
-                        //     item.data.sbus.channels[2],
-                        //     item.data.sbus.quality.valid_signal,
-                        //     item.data.sbus.quality.frame_loss_percent);
-                        break;
-
                     case PacketType::TEXT:
                         ESP_LOGI(TAG, "Message [%u]: %s", 
                             item.data.text.severity,
@@ -351,7 +341,6 @@ void TelemetryManager::telemetryTask(void* params) {
                         break;
                     
                     
-
                     default:
                         ESP_LOGW(TAG, "Unknown packet type: %u", 
                             static_cast<unsigned>(item.type));

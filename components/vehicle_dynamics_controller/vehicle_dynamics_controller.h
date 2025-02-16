@@ -17,9 +17,6 @@ public:
         // ESC driver configuration
         EscDriver::Config esc_config;
         
-        
-
-        
         // Task configuration
         uint32_t task_stack_size{4096};
         uint8_t task_priority{5};
@@ -43,12 +40,11 @@ private:
     static void controllerTask(void* arg);
     esp_err_t updateSteering();
     esp_err_t updateThrottle();
-    esp_err_t initializeMotors();  // New method for motor initialization
 
 
     Config config_;
     Servo steering_servo_;
-    EscDriver esc_driver_;      // Direct member instead of pointer
+    EscDriver esc_driver_;
     TaskHandle_t task_handle_{nullptr};
     bool is_running_{false};
 };

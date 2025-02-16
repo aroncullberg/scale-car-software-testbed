@@ -9,15 +9,10 @@
 // #include "system_types.h"
 // #include "telemetry_types.h"
 
+#define MIN 0
+#define MAX 1
+
 namespace sensor {
-
-struct SbusChannelConfig {
-    SbusChannelType type;
-    uint16_t min_raw;
-    uint16_t center_raw;  // NOTE: Only used for SYMMETRIC
-    uint16_t max_raw;
-};
-
 
 class SBUS {
     public:
@@ -38,16 +33,15 @@ class SBUS {
     esp_err_t init();
     esp_err_t start();
     esp_err_t stop();
-
-    static const char *getChannelName(SbusChannel channel);
+// 
+    // static const char *getChannelName(SbusChannel channel);
 
 private:
     esp_err_t configureUART();
     
     void processFrame(const uint8_t* frame, size_t len);
-    void updateChannelValues(const uint16_t* raw_channels);
     void monitorSignalQuality(); 
-    float scaleChannelValue(uint16_t raw_value, const SbusChannelConfig& config);
+    uint16_t scaleChannelValue(uint16_t raw_value, uint16_t min_raw, uint16_t max_raw);
 
     // Task related
     static void sbusTask(void* parameters);
@@ -61,6 +55,28 @@ private:
     size_t buffer_index_{0};
 
     bool is_running{false};
+
+    static constexpr char* TAG = "SBUS";
+
+    // NOTE: Yeah this is uglu but its better than haiving a gian switchstament where this is used, i like it, it stays.
+    static constexpr uint16_t CHANNEL_CONFIGS[][2] = {
+        {CONFIG_SBUS_CH0_MIN, CONFIG_SBUS_CH0_MAX},
+        {CONFIG_SBUS_CH1_MIN, CONFIG_SBUS_CH1_MAX},
+        {CONFIG_SBUS_CH2_MIN, CONFIG_SBUS_CH2_MAX},
+        {CONFIG_SBUS_CH3_MIN, CONFIG_SBUS_CH3_MAX},
+        {CONFIG_SBUS_CH4_MIN, CONFIG_SBUS_CH4_MAX},
+        {CONFIG_SBUS_CH5_MIN, CONFIG_SBUS_CH5_MAX},
+        {CONFIG_SBUS_CH6_MIN, CONFIG_SBUS_CH6_MAX},
+        {CONFIG_SBUS_CH7_MIN, CONFIG_SBUS_CH7_MAX},
+        {CONFIG_SBUS_CH8_MIN, CONFIG_SBUS_CH8_MAX},
+        {CONFIG_SBUS_CH9_MIN, CONFIG_SBUS_CH9_MAX},
+        {CONFIG_SBUS_CH10_MIN, CONFIG_SBUS_CH10_MAX},
+        {CONFIG_SBUS_CH11_MIN, CONFIG_SBUS_CH11_MAX},
+        {CONFIG_SBUS_CH12_MIN, CONFIG_SBUS_CH12_MAX},
+        {CONFIG_SBUS_CH13_MIN, CONFIG_SBUS_CH13_MAX},
+        {CONFIG_SBUS_CH14_MIN, CONFIG_SBUS_CH14_MAX},
+        {CONFIG_SBUS_CH15_MIN, CONFIG_SBUS_CH15_MAX},
+    };
 };
 
 } // namespace sensor
