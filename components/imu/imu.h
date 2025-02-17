@@ -24,11 +24,11 @@ public:
         int8_t spi_mosi_pin{-1};
         int8_t spi_sck_pin{-1};
         int8_t spi_cs_pin{-1};
-        int spi_clock_speed_hz{7000000}; // 7MHz default
+        int spi_clock_speed_hz{4000000}; // 7MHz default
         
         // IMU Configuration
-        icm20948_accel_config_fs_sel_e accel_fsr{GPM_2};
-        icm20948_gyro_config_1_fs_sel_e gyro_fsr{DPS_250};
+        icm20948_accel_config_fs_sel_e accel_fsr{GPM_16};
+        icm20948_gyro_config_1_fs_sel_e gyro_fsr{DPS_500};
     };
 
     explicit IMU(const Config& config);
@@ -46,6 +46,8 @@ private:
     esp_err_t configureSPI();
     esp_err_t configureIMU();
     esp_err_t initializeDMP();
+
+    bool validDeviceId();
     
     static void imuTask(void* parameters);
     TaskHandle_t task_handle_{nullptr};
@@ -58,8 +60,10 @@ private:
     bool is_running{false};
 
     // SPI bus config
-    spi_bus_config_t bus_config_{};
+    spi_bus_config_t spi_bus_config_{};
     spi_device_interface_config_t device_config_{};
+
+    static constexpr char* TAG = "IMU";
 };
 
 } // namespace sensor

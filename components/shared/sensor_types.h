@@ -90,41 +90,35 @@ struct GpsData {
 };
 
 struct ImuData {
-    // Raw accelerometer data (in g's)
-    float accel_x{0.0f};
-    float accel_y{0.0f};
-    float accel_z{0.0f};
+    int16_t accel_x{0};  // 1 unit = 1/2048 g
+    int16_t accel_y{0};  // 1 unit = 1/2048 g
+    int16_t accel_z{0};  // 1 unit = 1/2048 g
     
-    // Raw gyroscope data (in deg/s)
-    float gyro_x{0.0f};
-    float gyro_y{0.0f};
-    float gyro_z{0.0f};
+    int16_t gyro_x{0};   // 1 unit = 1/64 dps
+    int16_t gyro_y{0};   // 1 unit = 1/64 dps
+    int16_t gyro_z{0};   // 1 unit = 1/64 dps
 
-    float accel_cal_x{0.0f};
-    float accel_cal_y{0.0f};
-    float accel_cal_z{0.0f};
-
-    float gyro_cal_x{0.0f};
-    float gyro_cal_y{0.0f};
-    float gyro_cal_z{0.0f};
+    int16_t gyro_cal_x{0};   // 1 unit = 1/64 dps
+    int16_t gyro_cal_y{0};   // 1 unit = 1/64 dps
+    int16_t gyro_cal_z{0};   // 1 unit = 1/64 dps
     
-    // Quaternion orientation
-    float quat_w{1.0f};  // Real component
-    float quat_x{0.0f};  // i component
-    float quat_y{0.0f};  // j component
-    float quat_z{0.0f};  // k component
+    // Quaternion orientation (Q30 format)
+    int32_t  quat_w{1 << 30};  // Real component, Q30, Initialized to represent 1.0
+    int32_t  quat_x{0};  // i component
+    int32_t  quat_y{0};  // j component
+    int32_t  quat_z{0};  // k component
     uint16_t quat_accuracy{0}; // DMP accuracy indicator
 
     // game roation vector (for smooth rotations)
-    float game_quat_w{1.0f};
-    float game_quat_x{0.0f};
-    float game_quat_y{0.0f};
-    float game_quat_z{0.0f};
+    int32_t  game_quat_w{1 << 30};
+    int32_t  game_quat_x{0};
+    int32_t  game_quat_y{0};
+    int32_t  game_quat_z{0};
 
     // grav vector
-    float linear_accel_x{0.0f};
-    float linear_accel_y{0.0f};
-    float linear_accel_z{0.0f};
+    int16_t  linear_accel_x{0};
+    int16_t  linear_accel_y{0};
+    int16_t  linear_accel_z{0};
 
     // Quality metrics
     struct {
