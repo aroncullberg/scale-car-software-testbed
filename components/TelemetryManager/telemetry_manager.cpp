@@ -312,14 +312,14 @@ void TelemetryManager::telemetryTask(void* params) {
                         break;
 
                     case PacketType::SENSOR_IMU:
-                        ESP_LOGI(TAG, "IMU Data - Accel(x:%.2f,y:%.2f,z:%.2f) "
-                            "Gyro(x:%.2f,y:%.2f,z:%.2f)", 
-                            item.data.imu.accel_x,
-                            item.data.imu.accel_y,
-                            item.data.imu.accel_z,
-                            item.data.imu.gyro_x,
-                            item.data.imu.gyro_y,
-                            item.data.imu.gyro_z);
+                        // ESP_LOGI(TAG, "IMU Data - Accel(x:%.2f,y:%.2f,z:%.2f) "
+                        //     "Gyro(x:%.2f,y:%.2f,z:%.2f)", 
+                        //     item.data.imu.accel_x,
+                        //     item.data.imu.accel_y,
+                        //     item.data.imu.accel_z,
+                        //     item.data.imu.gyro_x,
+                        //     item.data.imu.gyro_y,
+                        //     item.data.imu.gyro_z);
                         break;
 
                     case PacketType::TEXT:

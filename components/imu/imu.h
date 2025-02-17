@@ -12,21 +12,20 @@ extern "C" {
     #include "icm20948_spi.h"
 }
 
+static const int FOUR_MHZ = 4000000;
+
 namespace sensor {
 
 class IMU {
 public:
-    // Configuration structure
     struct Config {
-        // SPI Configuration
         spi_host_device_t spi_host{SPI3_HOST};
         int8_t spi_miso_pin{-1};
         int8_t spi_mosi_pin{-1};
         int8_t spi_sck_pin{-1};
         int8_t spi_cs_pin{-1};
-        int spi_clock_speed_hz{4000000}; // 7MHz default
+        int spi_clock_speed_hz{FOUR_MHZ};
         
-        // IMU Configuration
         icm20948_accel_config_fs_sel_e accel_fsr{GPM_16};
         icm20948_gyro_config_1_fs_sel_e gyro_fsr{DPS_500};
     };
@@ -63,7 +62,7 @@ private:
     spi_bus_config_t spi_bus_config_{};
     spi_device_interface_config_t device_config_{};
 
-    static constexpr char* TAG = "IMU";
+    static constexpr const char* TAG = "IMU";
 };
 
 } // namespace sensor

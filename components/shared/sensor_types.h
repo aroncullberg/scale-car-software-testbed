@@ -90,6 +90,7 @@ struct GpsData {
 };
 
 struct ImuData {
+    // Using GMP_16 which means the values are 16 bit -> -32768 to +32767 -> 32768 / 16 = 2048 counts/g
     int16_t accel_x{0};  // 1 unit = 1/2048 g
     int16_t accel_y{0};  // 1 unit = 1/2048 g
     int16_t accel_z{0};  // 1 unit = 1/2048 g
@@ -103,22 +104,15 @@ struct ImuData {
     int16_t gyro_cal_z{0};   // 1 unit = 1/64 dps
     
     // Quaternion orientation (Q30 format)
-    int32_t  quat_w{1 << 30};  // Real component, Q30, Initialized to represent 1.0
-    int32_t  quat_x{0};  // i component
-    int32_t  quat_y{0};  // j component
-    int32_t  quat_z{0};  // k component
-    uint16_t quat_accuracy{0}; // DMP accuracy indicator
+    int32_t  quat9_x{0};  // i component
+    int32_t  quat9_y{0};  // j component
+    int32_t  quat9_z{0};  // k component
+    uint16_t quat9_accuracy{0}; // DMP accuracy indicator
 
     // game roation vector (for smooth rotations)
-    int32_t  game_quat_w{1 << 30};
-    int32_t  game_quat_x{0};
-    int32_t  game_quat_y{0};
-    int32_t  game_quat_z{0};
-
-    // grav vector
-    int16_t  linear_accel_x{0};
-    int16_t  linear_accel_y{0};
-    int16_t  linear_accel_z{0};
+    int32_t  quat6_x{0};
+    int32_t  quat6_y{0};
+    int32_t  quat6_z{0};
 
     // Quality metrics
     struct {

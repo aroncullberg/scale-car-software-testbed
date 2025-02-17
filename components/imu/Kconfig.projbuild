@@ -6,7 +6,7 @@ menu "IMU Configuration"
             Enable the IMU module
 
     config IMU_SPI_CLK
-        int "SPI_CLK"
+        int "SPI CLK Pin"
         default 12
         range 0 48
         help
@@ -33,4 +33,59 @@ menu "IMU Configuration"
         help
             pin for the spi chip select
 
+    config IMU_ENABLE_DLPF
+        bool "Enable IMU Digital Low-Pass Filter (DLPF)"
+        default n
+        help
+            Enable the built-in hardware Digital Low-Pass Filter (DLPF)
+            for the accelerometer and gyroscope.  This can help reduce noise,
+            but it also introduces latency.  It is generally recommended to
+            DISABLE this when using the DMP, as the DMP performs its own
+            filtering.  Only enable this if you have a specific reason to
+            do so and understand the implications (increased latency,
+            potential over-smoothing).
+        
+
+    config IMU_DEBUG_LOGGING
+        bool "Enable Debug Logging"
+        default n
+        help
+            Enable detailed debug logging for the IMU.  This controls
+            the overall logging level; individual data types can be
+            enabled/disabled below. (warnign very verbose)
+
+    config IMU_LOG_ACCEL
+        bool "Log accelerometer data"
+        depends on IMU_DEBUG_LOGGING
+        default n
+        help
+            Log linear acceleration data (accel_x, accel_y, accel_z).
+
+    config IMU_LOG_GYRO
+        bool "Log gyroscope data"
+        depends on IMU_DEBUG_LOGGING
+        default n
+        help
+            Log raw gyroscope data (gyro_x, gyro_y, gyro_z).
+
+    config IMU_LOG_CALIBGYRO
+        bool "Log calibrated gyroscope data"
+        depends on IMU_DEBUG_LOGGING
+        default n
+        help
+            Log calibrated gyroscope data (gyro_cal_x, gyro_cal_y, gyro_cal_z).
+
+    config IMU_LOG_QUAT6
+        bool "Log calibrated gyroscope data"
+        depends on IMU_DEBUG_LOGGING
+        default n
+        help
+            Log Quat6 quaternion data (quat6_x, quat6_y, quat6_z).
+
+    config IMU_LOG_QUAT9
+        bool "Log calibrated gyroscope data"
+        depends on IMU_DEBUG_LOGGING
+        default n
+        help
+            Log Quat9 quaternion data (quat9_x, quat9_y, quat9_z, quat9_accuracy).
 endmenu

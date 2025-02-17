@@ -57,6 +57,7 @@ esp_err_t IMU::configureSPI() {
 esp_err_t IMU::configureIMU() {
     constexpr int MAX_RETRIES = 3;
     int retry_count = 0;
+    esp_err_t err;
     
     // while (retry_count <= MAX_RETRIES && icm20948_check_id(&icm_device_) != ICM_20948_STAT_OK) {
     while (retry_count <= MAX_RETRIES && validDeviceId()) {
@@ -115,7 +116,7 @@ esp_err_t IMU::configureIMU() {
         return ESP_FAIL;
     }
 
-
+    #if CONFIG_IMU_ENABLE_DLPF
     // DLPF settings - extra info curtesy of Claude 3.5 sonnet
     icm20948_dlpcfg_t dlp_config;
 
@@ -134,7 +135,7 @@ esp_err_t IMU::configureIMU() {
     dlp_config.g = GYR_D196BW6_N229BW8;
 
     // Set DLPF configuration
-    esp_err_t err = icm20948_set_dlpf_cfg(&icm_device_, 
+    err = icm20948_set_dlpf_cfg(&icm_device_, 
         (icm20948_internal_sensor_id_bm)(ICM_20948_INTERNAL_ACC | ICM_20948_INTERNAL_GYR), 
         dlp_config);
     if (err != ICM_20948_STAT_OK) {
@@ -154,6 +155,19 @@ esp_err_t IMU::configureIMU() {
         ESP_LOGE(TAG, "Failed to enable gyroscope DLPF");
         return ESP_FAIL;
     }
+    # else 
+    err = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_ACC, false);
+    if (err != ICM_20948_STAT_OK) {
+        ESP_LOGE(TAG, "Failed to enable accelerometer DLPF");
+        return ESP_FAIL;
+    }
+
+    err = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_GYR, false);
+    if (err != ICM_20948_STAT_OK) {
+        ESP_LOGE(TAG, "Failed to enable gyroscope DLPF");
+        return ESP_FAIL;
+    }
+    #endif
 
     // Wake up the device
     icm20948_sleep(&icm_device_, false);
@@ -173,18 +187,16 @@ esp_err_t IMU::initializeDMP() {
     success &= (icm20948_init_dmp_sensor_with_defaults(&icm_device_) == ICM_20948_STAT_OK);
     
     // Raw 6-axis sensors
-    success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_RAW_ACCELEROMETER, 1) == ICM_20948_STAT_OK);
-    success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_RAW_GYROSCOPE, 1) == ICM_20948_STAT_OK);
+    // success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_RAW_ACCELEROMETER, 1) == ICM_20948_STAT_OK);
+    // success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_RAW_GYROSCOPE, 1) == ICM_20948_STAT_OK);
     
     // Calibrated 6 axis sensors
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_ACCELEROMETER, 1) == ICM_20948_STAT_OK);
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GYROSCOPE, 1) == ICM_20948_STAT_OK);
 
-    // Orienation in quaternion
-    success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GYROSCOPE, 1) == ICM_20948_STAT_OK);
-    
-    // Additional orientation formats
+    //  - Game Rotation Vector (good for fast motion, no magnetometer)
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GAME_ROTATION_VECTOR, 1) == ICM_20948_STAT_OK);
+    //  - Rotation Vector (includes magnetometer for drift correction - slower, more accurate)
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_ROTATION_VECTOR, 1) == ICM_20948_STAT_OK);
 
     // Derived motion data
@@ -198,8 +210,8 @@ esp_err_t IMU::initializeDMP() {
     // Quaternion rates
     // Quat6 - maximum rate for what we for the fast one
     success &= (inv_icm20948_set_dmp_sensor_period(&icm_device_, DMP_ODR_Reg_Quat6, 0) == ICM_20948_STAT_OK);
-    // Quat9 - low rate for (sensor)drift correction
-    success &= (inv_icm20948_set_dmp_sensor_period(&icm_device_, DMP_ODR_Reg_Quat9, 4) == ICM_20948_STAT_OK);
+    // Slower rate (for ROTATION_VECTOR) - Not needed with Game Rotation Vector
+    success &= (inv_icm20948_set_dmp_sensor_period(&icm_device_, DMP_ODR_Reg_Quat9, 4) == ICM_20948_STAT_OK);   
 
 
     // Enable FIFO and DMP
@@ -271,11 +283,21 @@ void IMU::imuTask(void* parameters) {
         if ((status == ICM_20948_STAT_OK) || (status == ICM_20948_STAT_FIFO_MORE_DATA_AVAIL)) {
             bool data_updated = false;
             
+            // Look, contrary to the name i think this is gravity compensated accel data since we turned on that before
             if (dmp_data.header & DMP_header_bitmap_Accel) {
                 instance->current_data_.accel_x = dmp_data.Raw_Accel.Data.X;
                 instance->current_data_.accel_y = dmp_data.Raw_Accel.Data.Y;
                 instance->current_data_.accel_z = dmp_data.Raw_Accel.Data.Z;
                 data_updated = true;
+
+                #if CONFIG_IMU_LOG_ACCEL
+                // Convert to g (1 unit = 1/2048 g)
+                ESP_LOGI(TAG, "Accel: x=%.3f g, y=%.3f g, z=%.3f g",
+                    (static_cast<double>(instance->current_data_.accel_x) / 2048.0) * 9.82,
+                    (static_cast<double>(instance->current_data_.accel_y) / 2048.0) * 9.82,
+                    (static_cast<double>(instance->current_data_.accel_z) / 2048.0) * 9.82);
+           
+                #endif
             }
 
             if (dmp_data.header & DMP_header_bitmap_Gyro) {
@@ -283,6 +305,12 @@ void IMU::imuTask(void* parameters) {
                 instance->current_data_.gyro_y = dmp_data.Raw_Gyro.Data.Y;
                 instance->current_data_.gyro_z = dmp_data.Raw_Gyro.Data.Z;
                 data_updated = true;
+                #if CONFIG_IMU_LOG_GYRO
+                    ESP_LOGI(TAG, "Gyro: x=%.3f dps, y=%.3f dps, z=%.3f dps",
+                        static_cast<double>(instance->current_data_.gyro_x) / 64.0,
+                        static_cast<double>(instance->current_data_.gyro_y) / 64.0,
+                        static_cast<double>(instance->current_data_.gyro_z) / 64.0);
+                #endif
             } 
 
             if (dmp_data.header & DMP_header_bitmap_Gyro_Calibr) {
@@ -290,35 +318,46 @@ void IMU::imuTask(void* parameters) {
                 instance->current_data_.gyro_cal_y = dmp_data.Gyro_Calibr.Data.Y;
                 instance->current_data_.gyro_cal_z = dmp_data.Gyro_Calibr.Data.Z;
                 data_updated = true;
+                #if CONFIG_IMU_LOG_CALIBGYRO
+                    ESP_LOGI(TAG, "GyroCalib: x=%.3f dps, y=%.3f dps, z=%.3f dps",
+                        static_cast<double>(instance->current_data_.gyro_cal_x) / 64.0,
+                        static_cast<double>(instance->current_data_.gyro_cal_y) / 64.0,
+                        static_cast<double>(instance->current_data_.gyro_cal_z) / 64.0);
+                #endif
             } 
 
             // Process 6-axis quaternion first (primary orientaiton source)
             // Process calibrated gyroscope data
             if (dmp_data.header & DMP_header_bitmap_Quat6) {
-                instance->current_data_.game_quat_w = dmp_data.Quat6.Data.Q0;
-                instance->current_data_.game_quat_x = dmp_data.Quat6.Data.Q1;
-                instance->current_data_.game_quat_y = dmp_data.Quat6.Data.Q2;
-                instance->current_data_.game_quat_z = dmp_data.Quat6.Data.Q3;
+                instance->current_data_.quat6_x = dmp_data.Quat6.Data.Q1;
+                instance->current_data_.quat6_y = dmp_data.Quat6.Data.Q2;
+                instance->current_data_.quat6_z = dmp_data.Quat6.Data.Q3;
                 data_updated = true;
+                #if CONFIG_IMU_LOG_QUAT6
+                    // Convert to quaternion units (Q30 format, so divide by 2^30)
+                    ESP_LOGI(TAG, "Quat6: x=%.6f, y=%.6f, z=%.6f",
+                        static_cast<double>(instance->current_data_.quat6_x) / 1073741824.0,
+                        static_cast<double>(instance->current_data_.quat6_y) / 1073741824.0,
+                        static_cast<double>(instance->current_data_.quat6_z) / 1073741824.0);
+                #endif
             } 
 
             // Process 9-axis quaternion for drift correction
-            if (dmp_data.header & DMP_header_bitmap_Quat6) {
-                instance->current_data_.quat_w = dmp_data.Quat9.Data.Q0;
-                instance->current_data_.quat_x = dmp_data.Quat9.Data.Q1;
-                instance->current_data_.quat_y = dmp_data.Quat9.Data.Q2;
-                instance->current_data_.quat_z = dmp_data.Quat9.Data.Q3;
-                instance->current_data_.quat_accuracy = dmp_data.Quat9.Data.Accuracy;
+            if (dmp_data.header & DMP_header_bitmap_Quat9) {
+                instance->current_data_.quat9_x = dmp_data.Quat9.Data.Q1;
+                instance->current_data_.quat9_y = dmp_data.Quat9.Data.Q2;
+                instance->current_data_.quat9_z = dmp_data.Quat9.Data.Q3;
+                instance->current_data_.quat9_accuracy = dmp_data.Quat9.Data.Accuracy;
                 data_updated = true;
+                #if CONFIG_IMU_LOG_QUAT9
+                // Convert to quaternion units (Q30 format, so divide by 2^30)
+                ESP_LOGI(TAG, "Quat9: x=%.6f, y=%.6f, z=%.6f, acc=%u",
+                    static_cast<double>(instance->current_data_.quat9_x) / 1073741824.0,
+                    static_cast<double>(instance->current_data_.quat9_y) / 1073741824.0,
+                    static_cast<double>(instance->current_data_.quat9_z) / 1073741824.0,
+                    instance->current_data_.quat9_accuracy);
+                #endif
             } 
-
-        //     if (dmp_data.header & DMP_header_bitmap_Grv) { //check lib to see if this exists.
-        //         instance->current_data_.linear_accel_x = static_cast<int16_t>(dmp_data.Grav.Data.X); 
-        //         instance->current_data_.linear_accel_y = static_cast<int16_t>(dmp_data.Grav.Data.Y); 
-        //         instance->current_data_.linear_accel_z = static_cast<int16_t>(dmp_data.Grav.Data.Z); 
-        //         data_updated = true;
-        //    }
-
 
             if (data_updated) {
                 instance->current_data_.quality.valid_data = true;
@@ -344,21 +383,6 @@ void IMU::imuTask(void* parameters) {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
