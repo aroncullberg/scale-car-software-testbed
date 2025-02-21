@@ -12,7 +12,7 @@ idf_component_register(
         "imu"
         "TelemetryManager"
         "dshot_controller"
-        "vehicle_dynamics_controller"
+        "vdc"
         "servo"
         "nvs_flash"
 )

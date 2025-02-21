@@ -6,6 +6,7 @@
 #include "servo.h"
 #include "data_pool.h"
 #include "esc_driver.h"
+#include "quaternion.h"
 #include <memory>
 
 class VehicleDynamicsController {
@@ -41,6 +42,32 @@ private:
     esp_err_t updateSteering(uint16_t steering_position);
     esp_err_t updateThrottle(uint16_t throttle_value);
 
+    Quaternion referenceOrientation_;
+    float targetHeading_{0.0f};
+    uint32_t lastThrottleActiveTime_{0};
+
+    struct {
+        float kP{2.0f};                      // Proportional gain
+        float kI{0.05f};                     // Integral gain
+        float kD{0.1f};                      // Derivative gain
+        float integral{0.0f};                // Integral accumulator
+        float previousError{0.0f};           // Previous error for derivative
+    } headingPid_;
+
+    // Gyro assistance settings
+    struct {
+        bool enabled{true};                  // Enable/disable gyro assistance
+        float strength{0.5f};                // Gyro effect strength (0.0-1.0)
+        uint32_t resetTimeoutMs{500};        // Time after throttle cut to reset reference
+    } gyroConfig_;
+
+    // Helper methods
+    Quaternion getCurrentOrientation();
+    float calculateHeadingError();
+    float computePID(float error, float deltaTime);
+    void updateReferenceOrientation();
+    void updateGyroAssistance(float deltaTime);
+    
 
     Config config_;
     Servo steering_servo_;

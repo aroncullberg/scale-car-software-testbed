@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS 
-        "vehicle_dynamics_controller.cpp"
+       "vdc.cpp"
     INCLUDE_DIRS 
         "."
     REQUIRES         
@@ -8,6 +8,7 @@ idf_component_register(
         "freertos"
         "esp_common"
         "servo"
+        "shared"
         "data_pool"
         "dshot_controller"
 )

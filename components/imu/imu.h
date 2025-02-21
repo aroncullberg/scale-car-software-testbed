@@ -27,7 +27,7 @@ public:
         int spi_clock_speed_hz{250000};
         
         icm20948_accel_config_fs_sel_e accel_fsr{GPM_16};
-        icm20948_gyro_config_1_fs_sel_e gyro_fsr{DPS_250};
+        icm20948_gyro_config_1_fs_sel_e gyro_fsr{DPS_500};
     };
 
     explicit IMU(const Config& config);
@@ -50,6 +50,7 @@ private:
     
     static void imuTask(void* parameters);
     TaskHandle_t task_handle_{nullptr};
+    esp_err_t setFullScaleRanges();
 
     Config config_t;
     icm20948_device_t icm_device_{};

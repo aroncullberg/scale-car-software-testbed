@@ -44,7 +44,12 @@ menu "IMU Configuration"
             filtering.  Only enable this if you have a specific reason to
             do so and understand the implications (increased latency,
             potential over-smoothing).
-        
+
+    config IMU_DEBUG_FSR
+        bool "Enable fsr debugging messages"
+        default n
+        help
+            Enables detailed logging of full-scale range setting operations.
 
     config IMU_DEBUG_LOGGING
         bool "Enable Debug Logging"

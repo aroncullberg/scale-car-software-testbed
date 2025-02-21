@@ -12,7 +12,7 @@
 #include "esc_driver.h"
 #include "nvs_flash.h"
 // #include "esp_event.h"
-#include "vehicle_dynamics_controller.h"
+#include "vdc.h"
 #include "esp_mac.h"
 
 #ifndef TAG
@@ -103,8 +103,8 @@ extern "C" void app_main(void) {
     
 
     VehicleDynamicsController vd_controller(vd_config);
-    ESP_ERROR_CHECK(vd_controller.init());
-    ESP_ERROR_CHECK(vd_controller.start());
+    // ESP_ERROR_CHECK(vd_controller.init());
+    // ESP_ERROR_CHECK(vd_controller.start());
 
     while(1) {
         vTaskDelay(pdMS_TO_TICKS(1000));

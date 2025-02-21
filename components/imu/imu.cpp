@@ -57,9 +57,8 @@ esp_err_t IMU::configureSPI() {
 esp_err_t IMU::configureIMU() {
     constexpr int MAX_RETRIES = 3;
     int retry_count = 0;
-    esp_err_t err;
     
-    // while (retry_count <= MAX_RETRIES && icm20948_check_id(&icm_device_) != ICM_20948_STAT_OK) {
+    // ID
     while (retry_count <= MAX_RETRIES && validDeviceId()) {
         ESP_LOGW(TAG, "ID check failed, attempt %d of %d", retry_count + 1, MAX_RETRIES);
         retry_count++;
@@ -75,27 +74,46 @@ esp_err_t IMU::configureIMU() {
         ESP_LOGI(TAG, "ICM20948 check id passed");
     }
 
+    // WHOAMI
     icm20948_status_e status = ICM_20948_STAT_ERR;
     uint8_t whoami = 0x00;
     retry_count = 0;
     while (retry_count <= MAX_RETRIES && ((status != ICM_20948_STAT_OK) || (whoami != ICM_20948_WHOAMI))) {
         whoami = 0x00;
-		status = icm20948_get_who_am_i(&icm_device_, &whoami);
-		ESP_LOGE(TAG, "whoami does not match (0x %d). Retrying...", whoami);
-		vTaskDelay(1000 / portTICK_PERIOD_MS);
+        status = icm20948_get_who_am_i(&icm_device_, &whoami);
+        if (status != ICM_20948_STAT_OK || whoami != ICM_20948_WHOAMI) {
+            ESP_LOGW(TAG, "whoami does not match (0x%02x). Retrying...", whoami);
+            retry_count++;
+            vTaskDelay(pdMS_TO_TICKS(50));
+        } else {
+            break;
+        }
     }
 
     if (retry_count >= MAX_RETRIES) {
         ESP_LOGE(TAG, "whoami check failed after %d attempts, last value: 0x%02x", MAX_RETRIES, whoami);
         return ESP_ERR_NOT_FOUND;
     } else {
-        ESP_LOGI(TAG, "ICM20948 whoami passed");
-    } 
+        ESP_LOGI(TAG, "ICM20948 whoami passed: 0x%02x", whoami);
+    }
 
-
+    // Reste the device
     icm20948_sw_reset(&icm_device_);
-    // vTaskDelay(pdMS_TO_TICKS(50));
     vTaskDelay(250 / portTICK_PERIOD_MS);
+
+    // Wake up the device before configuring
+    // NOTE: this is kinda important, i mean what moron would try to configure it without waking up the device FIRST.
+    icm20948_sleep(&icm_device_, false);
+    vTaskDelay(pdMS_TO_TICKS(10));
+    icm20948_low_power(&icm_device_, false);
+    vTaskDelay(pdMS_TO_TICKS(10));
+
+    // Set full scale ranges using direct register access, wont work otherwise, i dont like it either.
+    esp_err_t err = setFullScaleRanges();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set full scale ranges");
+        return err;
+    }
 
     // Configure sensors for continuous mode
     icm20948_internal_sensor_id_bm sensors = (icm20948_internal_sensor_id_bm)(
@@ -107,27 +125,15 @@ esp_err_t IMU::configureIMU() {
         return ESP_FAIL;
     }
 
-    // Set full scale ranges
-    icm20948_fss_t fsr;
-    fsr.a = config_t.accel_fsr;
-    fsr.g = config_t.gyro_fsr;
-    if (icm20948_set_full_scale(&icm_device_, sensors, fsr) != ICM_20948_STAT_OK) {
-        ESP_LOGE(TAG, "Failed to set full scale ranges");
-        return ESP_FAIL;
-    }
-
     #if CONFIG_IMU_ENABLE_DLPF
-    // DLPF settings - extra info curtesy of Claude 3.5 sonnet
     icm20948_dlpcfg_t dlp_config;
 
-    // Accelerometer DLPF settings
     // ACC_D473BW_N499BW = Most responsive, least filtering
     // ACC_D246BW_N265BW = Good balance for RC car
     // ACC_D111BW_N136BW = More filtering, good for rough terrain
     // ACC_D50BW_N68BW   = Heavy filtering, very smooth but more lag
     dlp_config.a = ACC_D246BW_N265BW;
     
-    // Gyroscope DLPF settings
     // GYR_D361BW4_N376BW5 = Most responsive, least filtering
     // GYR_D196BW6_N229BW8 = Good balance for RC car
     // GYR_D151BW8_N187BW6 = More filtering
@@ -135,45 +141,119 @@ esp_err_t IMU::configureIMU() {
     dlp_config.g = GYR_D196BW6_N229BW8;
 
     // Set DLPF configuration
-    err = icm20948_set_dlpf_cfg(&icm_device_, 
+    status = icm20948_set_dlpf_cfg(&icm_device_, 
         (icm20948_internal_sensor_id_bm)(ICM_20948_INTERNAL_ACC | ICM_20948_INTERNAL_GYR), 
         dlp_config);
-    if (err != ICM_20948_STAT_OK) {
+    if (status != ICM_20948_STAT_OK) {
         ESP_LOGE(TAG, "Failed to configure DLPF settings");
         return ESP_FAIL;
     }
 
     // Enable DLPF for both sensors
-    err = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_ACC, true);
-    if (err != ICM_20948_STAT_OK) {
+    status = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_ACC, true);
+    if (status != ICM_20948_STAT_OK) {
         ESP_LOGE(TAG, "Failed to enable accelerometer DLPF");
         return ESP_FAIL;
     }
 
-    err = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_GYR, true);
-    if (err != ICM_20948_STAT_OK) {
-        ESP_LOGE(TAG, "Failed to enable gyroscope DLPF");
-        return ESP_FAIL;
-    }
-    err = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_ACC, true);
-    if (err != ICM_20948_STAT_OK) {
-        ESP_LOGE(TAG, "Failed to enable accelerometer DLPF");
-        return ESP_FAIL;
-    }
-
-    err = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_GYR, true);
-    if (err != ICM_20948_STAT_OK) {
+    status = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_GYR, true);
+    if (status != ICM_20948_STAT_OK) {
         ESP_LOGE(TAG, "Failed to enable gyroscope DLPF");
         return ESP_FAIL;
     }
     #endif
 
-    // Wake up the device
-    icm20948_sleep(&icm_device_, false);
-    icm20948_low_power(&icm_device_, false);
-
     return ESP_OK;
 }
+
+esp_err_t IMU::setFullScaleRanges() {
+    #if CONFIG_IMU_DEBUG_FSR
+    // Get current settings for debug purposes
+    icm20948_set_bank(&icm_device_, 2);
+    
+    icm20948_accel_config_t accel_config_before;
+    icm20948_status_e acc_status = icm20948_execute_r(&icm_device_, AGB2_REG_ACCEL_CONFIG, 
+                                                     (uint8_t*)&accel_config_before, 
+                                                     sizeof(accel_config_before));
+    
+    icm20948_gyro_config_1_t gyro_config_before;
+    icm20948_status_e gyro_status = icm20948_execute_r(&icm_device_, AGB2_REG_GYRO_CONFIG_1, 
+                                                      (uint8_t*)&gyro_config_before, 
+                                                      sizeof(gyro_config_before));
+    
+    if (acc_status == ICM_20948_STAT_OK && gyro_status == ICM_20948_STAT_OK) {
+        ESP_LOGI(TAG, "Current settings - Accel FSR: %d, Gyro FSR: %d", 
+                 accel_config_before.ACCEL_FS_SEL, gyro_config_before.GYRO_FS_SEL);
+    }
+    #endif
+    
+    // Make sure we're in the right bank
+    icm20948_set_bank(&icm_device_, 2);
+    
+    // Set accelerometer FSR
+    icm20948_accel_config_t accel_config;
+    icm20948_status_e status = icm20948_execute_r(&icm_device_, AGB2_REG_ACCEL_CONFIG, 
+                                                (uint8_t*)&accel_config, 
+                                                sizeof(accel_config));
+    if (status != ICM_20948_STAT_OK) {
+        ESP_LOGE(TAG, "Failed to read accelerometer config");
+        return ESP_FAIL;
+    }
+    
+    accel_config.ACCEL_FS_SEL = config_t.accel_fsr;
+    status = icm20948_execute_w(&icm_device_, AGB2_REG_ACCEL_CONFIG, 
+                               (uint8_t*)&accel_config, 
+                               sizeof(accel_config));
+    if (status != ICM_20948_STAT_OK) {
+        ESP_LOGE(TAG, "Failed to write accelerometer FSR");
+        return ESP_FAIL;
+    }
+    
+    vTaskDelay(pdMS_TO_TICKS(10)); // Give it time to apply
+    
+    // Set gyroscope FSR
+    icm20948_gyro_config_1_t gyro_config;
+    status = icm20948_execute_r(&icm_device_, AGB2_REG_GYRO_CONFIG_1, 
+                               (uint8_t*)&gyro_config, 
+                               sizeof(gyro_config));
+    if (status != ICM_20948_STAT_OK) {
+        ESP_LOGE(TAG, "Failed to read gyroscope config");
+        return ESP_FAIL;
+    }
+    
+    gyro_config.GYRO_FS_SEL = config_t.gyro_fsr;
+    status = icm20948_execute_w(&icm_device_, AGB2_REG_GYRO_CONFIG_1, 
+                               (uint8_t*)&gyro_config, 
+                               sizeof(gyro_config));
+    if (status != ICM_20948_STAT_OK) {
+        ESP_LOGE(TAG, "Failed to write gyroscope FSR");
+        return ESP_FAIL;
+    }
+    
+    vTaskDelay(pdMS_TO_TICKS(10)); // Give it time to apply
+    
+    #if CONFIG_IMU_DEBUG_FSR
+    // Verify the settings were correctly applied
+    icm20948_set_bank(&icm_device_, 2);
+    
+    icm20948_accel_config_t accel_config_after;
+    icm20948_execute_r(&icm_device_, AGB2_REG_ACCEL_CONFIG, 
+                      (uint8_t*)&accel_config_after, 
+                      sizeof(accel_config_after));
+    
+    icm20948_gyro_config_1_t gyro_config_after;
+    icm20948_execute_r(&icm_device_, AGB2_REG_GYRO_CONFIG_1, 
+                       (uint8_t*)&gyro_config_after, 
+                       sizeof(gyro_config_after));
+    
+    ESP_LOGI(TAG, "After setting - Accel FSR: %d (expected %d), Gyro FSR: %d (expected %d)", 
+             accel_config_after.ACCEL_FS_SEL, config_t.accel_fsr,
+             gyro_config_after.GYRO_FS_SEL, config_t.gyro_fsr);
+    #endif
+    
+    return ESP_OK;
+}
+
 
 bool IMU::validDeviceId() {
     return icm20948_check_id(&icm_device_) != ICM_20948_STAT_OK;
@@ -290,12 +370,11 @@ void IMU::imuTask(void* parameters) {
                 data_updated = true;
 
                 #if CONFIG_IMU_LOG_ACCEL
-                // Convert to g (1 unit = 1/2048 g)
+                // Convert to m/s (1 unit = 1/2048 g)[m/s^2]
                 ESP_LOGI(TAG, "Accel: x=%.3f g, y=%.3f g, z=%.3f g",
                     (static_cast<double>(instance->current_data_.accel_x) / 2048.0) * 9.82,
                     (static_cast<double>(instance->current_data_.accel_y) / 2048.0) * 9.82,
                     (static_cast<double>(instance->current_data_.accel_z) / 2048.0) * 9.82);
-           
                 #endif
             }
 
