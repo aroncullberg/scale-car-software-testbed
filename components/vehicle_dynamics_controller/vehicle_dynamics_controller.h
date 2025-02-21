@@ -38,8 +38,8 @@ private:
     static constexpr const char* TAG = "VehicleDynamics";
     
     static void controllerTask(void* arg);
-    esp_err_t updateSteering();
-    esp_err_t updateThrottle();
+    esp_err_t updateSteering(uint16_t steering_position);
+    esp_err_t updateThrottle(uint16_t throttle_value);
 
 
     Config config_;

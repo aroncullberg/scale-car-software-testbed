@@ -36,11 +36,15 @@ esp_err_t EscDriver::init(const Config& config) {
             create_encoder(&motor.encoder),
             TAG, "Failed to create encoder for motor position %d", static_cast<int>(position)
         );
+        ESP_RETURN_ON_ERROR(
+            rmt_enable(motor.channel),
+            TAG, "Failed to enable RMT channel for motor position %d", static_cast<int>(position)
+        );
     }
 
     initialized_ = true;
+    ESP_LOGI(TAG, "esc_driver intialized sucessfully");
 
-    ESP_RETURN_ON_ERROR(arm_all(), TAG, "Failed to arm motors during initializtion");
     return ESP_OK;
 }
 
@@ -76,12 +80,7 @@ esp_err_t EscDriver::start() {
     ESP_RETURN_ON_FALSE(initialized_, ESP_ERR_INVALID_STATE, TAG, "Not initialized");
     ESP_RETURN_ON_FALSE(!started_, ESP_ERR_INVALID_STATE, TAG, "Already started");
 
-    for (auto& [position, motor] : motors_) {
-        ESP_RETURN_ON_ERROR(
-            rmt_enable(motor.channel),
-            TAG, "Failed to enable RMT channel for motor position %d", static_cast<int>(position)
-        );
-    }
+    ESP_RETURN_ON_ERROR(arm_all(), TAG, "Failed to arm motors during initializtion");
 
     started_ = true;
     return ESP_OK;
@@ -90,6 +89,8 @@ esp_err_t EscDriver::start() {
 esp_err_t EscDriver::arm_all() {
 
     for (auto& [position, motor] : motors_) {
+        ESP_LOGI(TAG, "Arming: %d", static_cast<uint16_t>(position));
+        // set_command(position, EscDriver::DshotCommand::MOTOR_STOP, false);
         dshot_esc_throttle_t frame = {
             .throttle = 0,
             .telemetry_req = false
@@ -126,10 +127,17 @@ esp_err_t EscDriver::set_throttle(MotorPosition position, uint16_t input_throttl
     auto it = motors_.find(position);
     ESP_RETURN_ON_FALSE(it != motors_.end(), ESP_ERR_NOT_FOUND, TAG, "Motor position not found");
     
+    // if (xTaskGetTickCount() % 1000 == 0) {
+    //     ESP_LOGI(TAG, "Throttle value before scaling %d", input_throttle);
+    // }
+
     // Scale from 1000-2000 to 48-2047
     uint16_t normalized = input_throttle - 1000;
     uint16_t dshot_throttle = 48 + (normalized * 1999) / 1000;
-    
+
+    // if (xTaskGetTickCount() % 1000 == 0) {
+    //     ESP_LOGI(TAG, "Throttle value after scaling %d", dshot_throttle);
+    // }    
     MotorControl& motor = it->second;
     dshot_esc_throttle_t frame = {
         .throttle = dshot_throttle,
@@ -156,8 +164,9 @@ esp_err_t EscDriver::set_throttle(MotorPosition position, uint16_t input_throttl
 }
 
 esp_err_t EscDriver::set_command(MotorPosition position, DshotCommand command, bool telemetry) {
-    ESP_RETURN_ON_FALSE(initialized_ && started_, ESP_ERR_INVALID_STATE, TAG, "Driver not initialized or started");
-    ESP_RETURN_ON_FALSE(armed_, ESP_ERR_INVALID_STATE, TAG, "Motors not armed");
+    ESP_RETURN_ON_FALSE(initialized_, ESP_ERR_INVALID_STATE, TAG, "Driver not initialized or started");
+    // ESP_RETURN_ON_FALSE(initialized_ && started_, ESP_ERR_INVALID_STATE, TAG, "Driver not initialized or started");
+    // ESP_RETURN_ON_FALSE(armed_, ESP_ERR_INVALID_STATE, TAG, "Motors not armed");
     
     auto it = motors_.find(position);
     ESP_RETURN_ON_FALSE(it != motors_.end(), ESP_ERR_NOT_FOUND, TAG, "Motor position not found");
@@ -169,7 +178,7 @@ esp_err_t EscDriver::set_command(MotorPosition position, DshotCommand command, b
     };
 
     rmt_transmit_config_t transmit_config = {
-        .loop_count = -1,
+        .loop_count = 1,
         .flags = {
             .eot_level = 0,
             .queue_nonblocking = false

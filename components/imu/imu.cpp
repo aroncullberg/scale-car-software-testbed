@@ -72,7 +72,7 @@ esp_err_t IMU::configureIMU() {
         ESP_LOGE(TAG, "ID check failed after %d attempts", MAX_RETRIES);
         return ESP_ERR_NOT_FOUND;
     } else {
-        ESP_LOGE(TAG, "ICM20948 check id passed");
+        ESP_LOGI(TAG, "ICM20948 check id passed");
     }
 
     icm20948_status_e status = ICM_20948_STAT_ERR;
@@ -81,7 +81,7 @@ esp_err_t IMU::configureIMU() {
     while (retry_count <= MAX_RETRIES && ((status != ICM_20948_STAT_OK) || (whoami != ICM_20948_WHOAMI))) {
         whoami = 0x00;
 		status = icm20948_get_who_am_i(&icm_device_, &whoami);
-		ESP_LOGE(TAG, "whoami does not match (0x %d). Halting...", whoami);
+		ESP_LOGE(TAG, "whoami does not match (0x %d). Retrying...", whoami);
 		vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 
@@ -89,7 +89,7 @@ esp_err_t IMU::configureIMU() {
         ESP_LOGE(TAG, "whoami check failed after %d attempts, last value: 0x%02x", MAX_RETRIES, whoami);
         return ESP_ERR_NOT_FOUND;
     } else {
-        ESP_LOGE(TAG, "ICM20948 whoami passed");
+        ESP_LOGI(TAG, "ICM20948 whoami passed");
     } 
 
 
@@ -155,14 +155,13 @@ esp_err_t IMU::configureIMU() {
         ESP_LOGE(TAG, "Failed to enable gyroscope DLPF");
         return ESP_FAIL;
     }
-    # else 
-    err = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_ACC, false);
+    err = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_ACC, true);
     if (err != ICM_20948_STAT_OK) {
         ESP_LOGE(TAG, "Failed to enable accelerometer DLPF");
         return ESP_FAIL;
     }
 
-    err = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_GYR, false);
+    err = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_GYR, true);
     if (err != ICM_20948_STAT_OK) {
         ESP_LOGE(TAG, "Failed to enable gyroscope DLPF");
         return ESP_FAIL;

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/components/GPS/tinygps-espidf" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/components/GPS/tinygps-espidf/TinyGPSPlus" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/components/icm20948" vcs="Git" />
+  </component>
+</project>

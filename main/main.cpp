@@ -21,22 +21,23 @@
 
 extern "C" void app_main(void) {
     // Configure telemetry manager
-    telemetry::TelemetryManager::Config telemetry_config = {
-        .peer_mac = {0xDC, 0xDA, 0x0C, 0x2A, 0x17, 0xD8},
-        .queue_size = 16,
-        .task_period = pdMS_TO_TICKS(10),
-        .fetcher_period = pdMS_TO_TICKS(20),
-        .esp_now_channel = 0,
-        .task_priority = 5,
-        .fetcher_priority = 5,
-        .task_stack_size = 4096,
-        .fetcher_stack_size = 4096
-    };
+    // telemetry::TelemetryManager::Config telemetry_config = {
+    //     .peer_mac = {0xDC, 0xDA, 0x0C, 0x2A, 0x17, 0xD8},
+    //     .queue_size = 16,
+    //     .task_period = pdMS_TO_TICKS(10),
+    //     .fetcher_period = pdMS_TO_TICKS(20),
+    //     .esp_now_channel = 0,
+    //     .task_priority = 5,
+    //     .fetcher_priority = 5,
+    //     .task_stack_size = 4096,
+    //     .fetcher_stack_size = 4096
+    // };
 
-    ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().init(telemetry_config));
-    ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().start());
+    // ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().init(telemetry_config));
+    // ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().start());
+    vTaskDelay(pdMS_TO_TICKS(500));
 
-    if (CONFIG_SBUS_ENABLE) {
+    #if CONFIG_SBUS_ENABLE
         sensor::SBUS::Config sbus_config = {
             .uart_num = static_cast<uart_port_t>(CONFIG_SBUS_UART_NUM),        
             .uart_tx_pin = GPIO_NUM_17,    
@@ -46,10 +47,10 @@ extern "C" void app_main(void) {
         static sensor::SBUS sbus(sbus_config);
         ESP_ERROR_CHECK(sbus.init());
         ESP_ERROR_CHECK(sbus.start());
-    }
+    #endif
 
 
-    if (CONFIG_GPS_ENABLE) {
+    #if CONFIG_GPS_ENABLE
         sensor::GPS::Config gps_config = {
             .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
             .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
@@ -61,10 +62,10 @@ extern "C" void app_main(void) {
         static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
         ESP_ERROR_CHECK(gps.init());
         ESP_ERROR_CHECK(gps.start());
-    }
+    #endif
 
 
-    if (CONFIG_IMU_ENABLE) {
+    #if CONFIG_IMU_ENABLE
         sensor::IMU::Config imu_config = {
             .spi_host = SPI2_HOST,
             .spi_miso_pin = CONFIG_IMU_SPI_MISO,
@@ -75,7 +76,7 @@ extern "C" void app_main(void) {
         static sensor::IMU imu(imu_config);
         ESP_ERROR_CHECK(imu.init());
         ESP_ERROR_CHECK(imu.start());
-    }
+    #endif
     
     // Configure the steering servo
     Servo::Config servo_config = {
@@ -97,7 +98,7 @@ extern "C" void app_main(void) {
         .esc_config = esc_config,       
         .task_stack_size = 4096,
         .task_priority = 5,
-        .task_period = pdMS_TO_TICKS(20)
+        .task_period = pdMS_TO_TICKS(2)
     };
     
 

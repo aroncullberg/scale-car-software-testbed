@@ -18,7 +18,6 @@ esp_err_t VehicleDynamicsController::init() {
     err = esc_driver_.init(config_.esc_config);
     ESP_RETURN_ON_ERROR(err, TAG, "Failed to initialize ESC driver");
 
-    ESP_LOGI(TAG, "Vehicle dynamics controller initialized");
     return ESP_OK;
 }
 
@@ -26,11 +25,13 @@ esp_err_t VehicleDynamicsController::start() {
     if (is_running_) {
         return ESP_OK;
     }
-
-    esp_err_t err = esc_driver_.start();
+    esp_err_t err;
+    
+    err = esc_driver_.start();
     ESP_RETURN_ON_ERROR(err, TAG, "Failed to start ESC driver");
 
-    // Create the controller task
+    // esc_driver_.set_all_throttles(1020);
+
     BaseType_t ret = xTaskCreate(
         controllerTask,
         "veh_dynamics",
@@ -42,10 +43,7 @@ esp_err_t VehicleDynamicsController::start() {
     
 
     ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_FAIL, TAG, "Failed to create task");
-    
-    // err = initializeMotors();
-    // ESP_RETURN_ON_ERROR(err, TAG, "Motor initialization failed");
-
+     
     is_running_ = true;
     return ESP_OK;
 }
@@ -71,20 +69,37 @@ esp_err_t VehicleDynamicsController::stop() {
 void VehicleDynamicsController::controllerTask(void* arg) {
     auto* controller = static_cast<VehicleDynamicsController*>(arg);
     TickType_t last_wake_time = xTaskGetTickCount();
+    VehicleData &sbus_instance = VehicleData::instance();
+
+    size_t ch_throttle = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
+    size_t ch_steering = static_cast<size_t>(sensor::SbusChannel::STEERING);
 
     while(true) {
-        controller->updateSteering();
-        controller->updateThrottle();
+        if (sbus_instance.getSbus().quality.valid_signal == false) {
+            if (xTaskGetTickCount() % 100 == 0) {
+                ESP_LOGE(TAG, "Invlaid sbus signal");
+            }
+        } else {
+            controller->updateSteering(sbus_instance.getSbus().channels[ch_steering]);        
+            controller->updateThrottle(sbus_instance.getSbus().channels[ch_throttle]);        
+        }
+        
         vTaskDelayUntil(&last_wake_time, controller->config_.task_period);
+
+      //   vTaskDela(pdMS_TO_TICKS(1000)));
     }
 }
 
-esp_err_t VehicleDynamicsController::updateThrottle() {
-    sensor::SbusData sbus_data = VehicleData::instance().getSbus();
+esp_err_t VehicleDynamicsController::updateThrottle(uint16_t throttle_value) {
+    // sensor::SbusData sbus_data = VehicleData::instance().getSbus();
 
-    uint16_t throttle = sbus_data.channels[static_cast<size_t>(sensor::SbusChannel::THROTTLE)];
+    // uint16_t throttle = sbus_data.channels[static_cast<size_t>(sensor::SbusChannel::THROTTLE)];
+    // if (999 >= throttle || throttle >= 2001) {
+    //     ESPLOG
+    // }
+    ESP_RETURN_ON_FALSE(999 <= throttle_value || throttle_value <= 1300, ESP_ERR_INVALID_STATE, TAG, "Throttle out of bounds");
 
-    return esc_driver_.set_all_throttles(throttle);
+    return esc_driver_.set_all_throttles(throttle_value);
 
     // ESP_RETURN_ON_ERROR(
     //     esc_driver_.set_throttle(EscDriver::MotorPosition::FRONT_RIGHT, throttle),
@@ -106,12 +121,12 @@ esp_err_t VehicleDynamicsController::updateThrottle() {
     // return ESP_OK;
 }
 
-esp_err_t VehicleDynamicsController::updateSteering() {
+esp_err_t VehicleDynamicsController::updateSteering(uint16_t steering_position) {
     // Get latest SBUS data
-    sensor::SbusData sbus_data = VehicleData::instance().getSbus();
+    // sensor::SbusData sbus_data = VehicleData::instance().getSbus();
     
     // Process steering channel
-    uint16_t steering_position = sbus_data.channels[static_cast<size_t>(sensor::SbusChannel::STEERING)];
+    // uint16_t steering_position = sbus_data.channels[static_cast<size_t>(sensor::SbusChannel::STEERING)];
     
     // Set servo position
     esp_err_t err = steering_servo_.setPosition(steering_position);

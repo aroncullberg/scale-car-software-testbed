@@ -41,7 +41,7 @@ enum class SbusChannel : uint8_t {
 };
 
 struct SbusData {
-    uint16_t channels[16]{1500};
+    uint16_t channels[16]{1500}; // NOTE: range: 1000-2000 (well its scaled to this before being stored)
     struct {
         uint8_t frame_loss_percent{0};
         uint32_t error_count{0};

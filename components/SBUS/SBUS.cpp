@@ -170,11 +170,11 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
         return;
     }
 
-    if (CONFIG_SBUS_LOG_RAW_FRAMES) {
+    #if CONFIG_SBUS_LOG_RAW_FRAMES
         ESP_LOGI(TAG, "Frame: [%02X %02X %02X %02X %02X %02X %02X %02X ...]", 
                  frame[0], frame[1], frame[2], frame[3],
                  frame[4], frame[5], frame[6], frame[7]);
-    }
+    #endif
 
     int byte_index = 1; // <- skip start byte
     int bit_index = 0;
@@ -202,12 +202,14 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
             CHANNEL_CONFIGS[ch][MAX]
         );
 
-        if (CONFIG_SBUS_DEBUG_LOGGING) {
-            ESP_LOGI(TAG, "CH%d: Raw=%4d, Scaled=%4d", 
-                    ch, 
-                    raw_value, 
-                    current_data_.channels[ch]);
-        }
+        #if CONFIG_SBUS_DEBUG_LOGGING
+            if ((ch == 0 || ch == 1) && xTaskGetTickCount() % 100 == 0) {
+                ESP_LOGI(TAG, "CH%d: Raw=%4d, Scaled=%4d", 
+                        ch, 
+                        raw_value, 
+                        current_data_.channels[ch]);
+            }
+        #endif
     }
 
 
@@ -219,9 +221,13 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
 uint16_t SBUS::scaleChannelValue(uint16_t raw_value, uint16_t min_raw, uint16_t max_raw) {
     // if (raw_value < min_raw) raw_value = min_raw;
     // if (raw_value > max_raw) raw_value = max_raw;
+    if (raw_value < min_raw || raw_value > max_raw * 1.1) {
+        return 1000;
+    } else {
+        return 1000 + ((raw_value - min_raw) * 1000) / (max_raw - min_raw);
+    }
     
     // Scale to 1000-2000 range
-    return 1000 + ((raw_value - min_raw) * 1000) / (max_raw - min_raw);
 }
 
 void SBUS::monitorSignalQuality() {

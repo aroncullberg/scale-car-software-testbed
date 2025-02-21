@@ -10,8 +10,8 @@
 class EscDriver {
 public:
     enum class MotorPosition {
-        FRONT_LEFT,
         FRONT_RIGHT,
+        FRONT_LEFT,
         REAR_LEFT,
         REAR_RIGHT
     };
@@ -87,21 +87,21 @@ public:
     bool is_started() const { return started_; }
     bool is_armed() const { return armed_; }
     
-private:
+    private:
     struct MotorControl {
         rmt_channel_handle_t channel = nullptr;
         rmt_encoder_handle_t encoder = nullptr;
         uint16_t current_throttle = 0;
     };
-
+    
     static constexpr const char* TAG = "ESC Driver";
-
+    
     Config config_;
     std::map<MotorPosition, MotorControl> motors_;
     bool initialized_ = false;
     bool started_ = false;
     bool armed_ = false;
-
+    
     esp_err_t create_rmt_channel(gpio_num_t gpio_num, rmt_channel_handle_t* channel);
     esp_err_t create_encoder(rmt_encoder_handle_t* encoder);
     esp_err_t arm_all();

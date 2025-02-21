@@ -24,10 +24,10 @@ public:
         int8_t spi_mosi_pin{-1};
         int8_t spi_sck_pin{-1};
         int8_t spi_cs_pin{-1};
-        int spi_clock_speed_hz{FOUR_MHZ};
+        int spi_clock_speed_hz{250000};
         
         icm20948_accel_config_fs_sel_e accel_fsr{GPM_16};
-        icm20948_gyro_config_1_fs_sel_e gyro_fsr{DPS_500};
+        icm20948_gyro_config_1_fs_sel_e gyro_fsr{DPS_250};
     };
 
     explicit IMU(const Config& config);
@@ -57,6 +57,8 @@ private:
     
     ImuData current_data_{};
     bool is_running{false};
+
+    esp_err_t check_icm_status(icm20948_status_e status, const char* tag, const char* message);
 
     // SPI bus config
     spi_bus_config_t spi_bus_config_{};

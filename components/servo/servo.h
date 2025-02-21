@@ -35,4 +35,5 @@ private:
     mcpwm_gen_handle_t generator_{nullptr};
 
     static constexpr uint32_t TIMEBASE_RESOLUTION_HZ = 1000000;  // 1MHz, 1us per tick
+    static constexpr const char* TAG = "Servo";
 };

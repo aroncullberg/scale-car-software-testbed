@@ -111,17 +111,23 @@ esp_err_t Servo::init() {
     return ESP_OK;
 }
 
+// uint32_t Servo::calculateCompareValue(uint16_t position) const {
+//     position = std::max(uint16_t(1000), std::min(uint16_t(2000), position));
+    
+//     return 3000 - position;
+// }
+
 uint32_t Servo::calculateCompareValue(uint16_t position) const {
+    // Clamp the position to the valid range
     position = std::max(uint16_t(1000), std::min(uint16_t(2000), position));
-    
-    uint32_t normalized = position - 1000;
-    
-    uint32_t pulse_width = 
-        ((normalized * (config_.max_pulse_width_us - config_.min_pulse_width_us)) / 1000) 
-        + config_.min_pulse_width_us;
-    
-    return pulse_width;
+
+    // Scale position from [1000, 2000] to [500, 2500]
+    uint32_t scaled = CONFIG_SERVO_MIN_PULSE_WIDTH_US + ((position - 1000) * (CONFIG_SERVO_MAX_PULSE_WIDTH_US - CONFIG_SERVO_MIN_PULSE_WIDTH_US)) / (2000 - 1000);
+
+    // Invert within the range [500, 2500]
+    return 3000 - scaled;
 }
+
 
 esp_err_t Servo::setPosition(uint16_t position) {
     // return ESP_OK;
