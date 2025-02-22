@@ -272,6 +272,8 @@ esp_err_t IMU::initializeDMP() {
     // Calibrated 6 axis sensors
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_ACCELEROMETER, 1) == ICM_20948_STAT_OK);
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GYROSCOPE, 1) == ICM_20948_STAT_OK);
+    success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GYROSCOPE_UNCALIBRATED, 1) == ICM_20948_STAT_OK);
+
 
     //  - Game Rotation Vector (good for fast motion, no magnetometer)
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GAME_ROTATION_VECTOR, 1) == ICM_20948_STAT_OK);
@@ -372,37 +374,44 @@ void IMU::imuTask(void* parameters) {
                 #if CONFIG_IMU_LOG_ACCEL
                 // Convert to m/s (1 unit = 1/2048 g)[m/s^2]
                 ESP_LOGI(TAG, "Accel: x=%.3f g, y=%.3f g, z=%.3f g",
-                    (static_cast<double>(instance->current_data_.accel_x) / 2048.0) * 9.82,
-                    (static_cast<double>(instance->current_data_.accel_y) / 2048.0) * 9.82,
-                    (static_cast<double>(instance->current_data_.accel_z) / 2048.0) * 9.82);
+                    (static_cast<double>(instance->current_data_.accel_x) / 8192.0f),
+                    (static_cast<double>(instance->current_data_.accel_y) / 8192.0f),
+                    (static_cast<double>(instance->current_data_.accel_z) / 8192.0f));
                 #endif
             }
 
             if (dmp_data.header & DMP_header_bitmap_Gyro) {
-                instance->current_data_.gyro_x = dmp_data.Raw_Gyro.Data.X;
-                instance->current_data_.gyro_y = dmp_data.Raw_Gyro.Data.Y;
-                instance->current_data_.gyro_z = dmp_data.Raw_Gyro.Data.Z;
+                instance->current_data_.gyro_x = dmp_data.Raw_Gyro.Data.X - dmp_data.Raw_Gyro.Data.BiasX;
+                instance->current_data_.gyro_y = dmp_data.Raw_Gyro.Data.Y - dmp_data.Raw_Gyro.Data.BiasY;
+                instance->current_data_.gyro_z = dmp_data.Raw_Gyro.Data.Z - dmp_data.Raw_Gyro.Data.BiasZ;
                 data_updated = true;
                 #if CONFIG_IMU_LOG_GYRO
                     ESP_LOGI(TAG, "Gyro: x=%.3f dps, y=%.3f dps, z=%.3f dps",
-                        static_cast<double>(instance->current_data_.gyro_x) / 64.0,
-                        static_cast<double>(instance->current_data_.gyro_y) / 64.0,
-                        static_cast<double>(instance->current_data_.gyro_z) / 64.0);
+                        static_cast<double>(instance->current_data_.gyro_x) / 65.5f,
+                        static_cast<double>(instance->current_data_.gyro_y) / 65.5f,
+                        static_cast<double>(instance->current_data_.gyro_z) / 65.5f);
+
+
+                    // ESP_LOGI(TAG, "Gyro Bias Values: X=%d, Y=%d, Z=%d", 
+                    //             dmp_data.Raw_Gyro.Data.BiasX,
+                    //             dmp_data.Raw_Gyro.Data.BiasY, 
+                    //             dmp_data.Raw_Gyro.Data.BiasZ);
+                        
                 #endif
             } 
 
-            if (dmp_data.header & DMP_header_bitmap_Gyro_Calibr) {
-                instance->current_data_.gyro_cal_x = dmp_data.Gyro_Calibr.Data.X;
-                instance->current_data_.gyro_cal_y = dmp_data.Gyro_Calibr.Data.Y;
-                instance->current_data_.gyro_cal_z = dmp_data.Gyro_Calibr.Data.Z;
-                data_updated = true;
-                #if CONFIG_IMU_LOG_CALIBGYRO
-                    ESP_LOGI(TAG, "GyroCalib: x=%.3f dps, y=%.3f dps, z=%.3f dps",
-                        static_cast<double>(instance->current_data_.gyro_cal_x) / 64.0,
-                        static_cast<double>(instance->current_data_.gyro_cal_y) / 64.0,
-                        static_cast<double>(instance->current_data_.gyro_cal_z) / 64.0);
-                #endif
-            } 
+            // if (dmp_data.header & DMP_header_bitmap_Gyro_Calibr) {
+            //     instance->current_data_.gyro_cal_x = dmp_data.Gyro_Calibr.Data.X;
+            //     instance->current_data_.gyro_cal_y = dmp_data.Gyro_Calibr.Data.Y;
+            //     instance->current_data_.gyro_cal_z = dmp_data.Gyro_Calibr.Data.Z;
+            //     data_updated = true;
+            //     #if CONFIG_IMU_LOG_CALIBGYRO
+            //         ESP_LOGI(TAG, "GyroCalib: x=%.3f dps, y=%.3f dps, z=%.3f dps",
+            //             static_cast<double>(instance->current_data_.gyro_cal_x) / 64.0,
+            //             static_cast<double>(instance->current_data_.gyro_cal_y) / 64.0,
+            //             static_cast<double>(instance->current_data_.gyro_cal_z) / 64.0);
+            //     #endif
+            // } 
 
             // Process 6-axis quaternion first (primary orientaiton source)
             // Process calibrated gyroscope data

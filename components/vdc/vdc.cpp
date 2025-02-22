@@ -151,10 +151,9 @@ Quaternion VehicleDynamicsController::getCurrentOrientation() {
 float VehicleDynamicsController::calculateHeadingError() {
     Quaternion currentOrientation = getCurrentOrientation();
     
-    // Calculate base heading difference from reference
     float baseHeading = Quaternion::headingDifference(referenceOrientation_, currentOrientation);
     
-    // Calculate error from target heading (adjust for wrap-around)
+    // wrap arund causes issue
     float error = targetHeading_ - baseHeading;
     
     // Normalize to -PI to PI

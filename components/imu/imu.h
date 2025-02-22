@@ -26,7 +26,7 @@ public:
         int8_t spi_cs_pin{-1};
         int spi_clock_speed_hz{250000};
         
-        icm20948_accel_config_fs_sel_e accel_fsr{GPM_16};
+        icm20948_accel_config_fs_sel_e accel_fsr{GPM_4}; // NOTE: 
         icm20948_gyro_config_1_fs_sel_e gyro_fsr{DPS_500};
     };
 

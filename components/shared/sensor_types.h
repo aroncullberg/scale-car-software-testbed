@@ -90,10 +90,10 @@ struct GpsData {
 };
 
 struct ImuData {
-    // Using GMP_16 which means the values are 16 bit -> -32768 to +32767 -> 32768 / 16 = 2048 counts/g
-    int16_t accel_x{0};  // 1 unit = 1/2048 g
-    int16_t accel_y{0};  // 1 unit = 1/2048 g
-    int16_t accel_z{0};  // 1 unit = 1/2048 g
+    // Using GMP_4 which means the values are ... )TODO=
+    int16_t accel_x{0};  // 1 unit = 1/80?? g
+    int16_t accel_y{0};  // 1 unit = 1/80?? g
+    int16_t accel_z{0};  // 1 unit = 1/80?? g
     
     int16_t gyro_x{0};   // 1 unit = 1/64 dps
     int16_t gyro_y{0};   // 1 unit = 1/64 dps
