@@ -119,17 +119,23 @@ esp_err_t Servo::init() {
 
 uint32_t Servo::calculateCompareValue(uint16_t position) const {
     // Clamp the position to the valid range
-    position = std::max(uint16_t(1000), std::min(uint16_t(2000), position));
+    // TODO: make this error and return instead
+    position = std::max(uint16_t(CONFIG_SERVO_MIN_PULSE_WIDTH_US), 
+                       std::min(uint16_t(CONFIG_SERVO_MAX_PULSE_WIDTH_US), position));
+    
+    uint32_t scaled = CONFIG_SERVO_MIN_PULSE_WIDTH_US + 
+                     ((position - CONFIG_SERVO_MIN_PULSE_WIDTH_US) * 
+                      (CONFIG_SERVO_MAX_PULSE_WIDTH_US - CONFIG_SERVO_MIN_PULSE_WIDTH_US)) / 
+                     (CONFIG_SERVO_MAX_PULSE_WIDTH_US - CONFIG_SERVO_MIN_PULSE_WIDTH_US);
 
-    // Scale position from [1000, 2000] to [500, 2500]
-    uint32_t scaled = CONFIG_SERVO_MIN_PULSE_WIDTH_US + ((position - 1000) * (CONFIG_SERVO_MAX_PULSE_WIDTH_US - CONFIG_SERVO_MIN_PULSE_WIDTH_US)) / (2000 - 1000);
-
-    // Invert within the range [500, 2500]
-    return 3000 - scaled;
+    // Apply offset
+    return scaled + CONFIG_SERVO_OFFSET;
 }
 
 
 esp_err_t Servo::setPosition(uint16_t position) {
+    // ESP_LOGI(TAG, "%d -> %d", position,  static_cast<int>(calculateCompareValue(position)));
     // return ESP_OK;
+
     return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
 }

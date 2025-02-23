@@ -1,6 +1,7 @@
 #include "vdc.h"
 #include "esp_log.h"
 #include "esp_check.h"
+#include "esp_task_wdt.h"
 
 VehicleDynamicsController::VehicleDynamicsController(const Config& config)
     : config_(config),
@@ -12,7 +13,7 @@ VehicleDynamicsController::~VehicleDynamicsController() {
 }
 
 esp_err_t VehicleDynamicsController::init() {
-    esp_err_t err = steering_servo_.setPosition(0.0f); // Center the servo
+    esp_err_t err = steering_servo_.setPosition(1500); // Center the servo
     ESP_RETURN_ON_ERROR(err, TAG, "Failed to initialize steering servo");
 
     err = esc_driver_.init(config_.esc_config);
@@ -27,11 +28,6 @@ esp_err_t VehicleDynamicsController::start() {
     }
     esp_err_t err;
     
-    err = esc_driver_.start();
-    ESP_RETURN_ON_ERROR(err, TAG, "Failed to start ESC driver");
-
-    // esc_driver_.set_all_throttles(1020);
-
     BaseType_t ret = xTaskCreate(
         controllerTask,
         "veh_dynamics",
@@ -69,6 +65,7 @@ esp_err_t VehicleDynamicsController::stop() {
 void VehicleDynamicsController::controllerTask(void* arg) {
     auto* controller = static_cast<VehicleDynamicsController*>(arg);
     TickType_t last_wake_time = xTaskGetTickCount();
+    const TickType_t log_interval = 1000;
     VehicleData &sbus_instance = VehicleData::instance();
 
     size_t ch_throttle = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
@@ -76,24 +73,37 @@ void VehicleDynamicsController::controllerTask(void* arg) {
 
     controller->referenceOrientation_ = controller->getCurrentOrientation();
 
-
     while(true) {
         float deltaTime = controller->config_.task_period / 1000.0f;
 
         if (sbus_instance.getSbus().quality.valid_signal == false) {
+            continue;
             // if (xTaskGetTickCount() % 100 == 0) {
             //     ESP_LOGW(TAG, "Invlaid sbus signal");
             // }
-        } else {
-            // controller->updateSteering(sbus_instance.getSbus().channels[ch_steering]);  
-            controller->updateGyroAssistance(deltaTime);
-      
-            controller->updateThrottle(sbus_instance.getSbus().channels[ch_throttle]);        
         }
         
+        controller->updateGyroAssistance(deltaTime);
+    
+        if (sbus_instance.getSbus().channels[ch_throttle] > 1010 && !controller->esc_driver_.is_armed()) {
+            esp_err_t err = esp_task_wdt_reset();
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to reset task watchdog! Error: %d", err);
+            }
+            continue;
+        } else if (!controller->esc_driver_.is_armed()){
+            controller->esc_driver_.arm_all();
+        }
+        if (!controller->esc_driver_.is_armed()) {
+            if (sbus_instance.getSbus().channels[ch_throttle] > 1010) {
+                continue;
+            } else {
+                controller->esc_driver_.arm_all();
+            }
+        }
+        controller->updateThrottle(sbus_instance.getSbus().channels[ch_throttle]);        
+        
         vTaskDelayUntil(&last_wake_time, controller->config_.task_period);
-
-      //   vTaskDela(pdMS_TO_TICKS(1000)));
     }
 }
 
@@ -104,7 +114,7 @@ esp_err_t VehicleDynamicsController::updateThrottle(uint16_t throttle_value) {
     // if (999 >= throttle || throttle >= 2001) {
     //     ESPLOG
     // }
-    ESP_RETURN_ON_FALSE(999 <= throttle_value || throttle_value <= 1300, ESP_ERR_INVALID_STATE, TAG, "Throttle out of bounds");
+    // ESP_RETURN_ON_FALSE(999 <= throttle_value && throttle_value <= 1300, ESP_ERR_INVALID_STATE, TAG, "Throttle out of bounds");
 
     return esc_driver_.set_all_throttles(throttle_value);
 
@@ -127,21 +137,6 @@ esp_err_t VehicleDynamicsController::updateThrottle(uint16_t throttle_value) {
 
     // return ESP_OK;
 }
-
-esp_err_t VehicleDynamicsController::updateSteering(uint16_t steering_position) {
-    // Get latest SBUS data
-    // sensor::SbusData sbus_data = VehicleData::instance().getSbus();
-    
-    // Process steering channel
-    // uint16_t steering_position = sbus_data.channels[static_cast<size_t>(sensor::SbusChannel::STEERING)];
-    
-    // Set servo position
-    esp_err_t err = steering_servo_.setPosition(steering_position);
-    ESP_RETURN_ON_ERROR(err, TAG, "Steering update failed");
-
-    return ESP_OK;
-}
-
 
 Quaternion VehicleDynamicsController::getCurrentOrientation() {
     const auto& imuData = VehicleData::instance().getImu();
@@ -193,7 +188,7 @@ void VehicleDynamicsController::updateReferenceOrientation() {
     
     // Check if throttle is active (assuming throttle is on channel 0)
     // Adjust channel index and threshold based on your actual setup
-    bool throttleActive = (sbusData.channels[0] > 1100);
+    bool throttleActive = (sbusData.channels[0] > 1010);
     
     uint32_t currentTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
     
@@ -245,9 +240,32 @@ void VehicleDynamicsController::updateGyroAssistance(float deltaTime) {
     float directFactor = 1.0f - gyroConfig_.strength;
     float gyroFactor = gyroConfig_.strength;
     
-    // Final steering is a mix of direct control and gyro correction
-    float finalSteering = steeringInput * directFactor - correction * gyroFactor;
     
+    // Final steering is a mix of direct control and gyro correction
+    
+    float finalSteering = steeringInput * directFactor - correction * gyroFactor;
+    bool throttleActive = (sbusData.channels[0] > 1010);
+
+    // if (!throttleActive) {
+    //     finalSteering = steeringInput;
+    // }
+
+     
+    TickType_t tick = xTaskGetTickCount();
+    // ESP_LOGI(TAG, "Steering input: %d", static_cast<int>(tick));
+    
+    // char log_buffer[256];  // Adjust size as needed
+    // if (tick % 9 == 0) {
+    //     snprintf(log_buffer, sizeof(log_buffer),
+    //              "Steering input: %7.4f, directFactor: %7.4f, correction: %7.4f, gyroFactor: %7.4f, finalSteering: %7.4f",
+    //              steeringInput, directFactor, correction, gyroFactor, finalSteering);
+        
+    //     // Print to log
+    //     ESP_LOGI(TAG, "%s", log_buffer);
+
+    //     // Send over ESP-NOW, UART, etc.
+    // }
+
     // Clamp to valid range
     if (finalSteering > 1.0f) finalSteering = 1.0f;
     if (finalSteering < -1.0f) finalSteering = -1.0f;

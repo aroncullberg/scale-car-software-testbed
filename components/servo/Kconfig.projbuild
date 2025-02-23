@@ -29,4 +29,12 @@ menu "Servo Configuration"
         help
             PWM frequency for servo control.
             Standard servos use 50Hz, unsure if digital servos differ.
+
+    config SERVO_OFFSET
+        int "Offset in steering"
+        default 0
+        range -1000 1000
+        help
+            Offset in steering, dont remember which direciton is which so just try it out.
+
 endmenu

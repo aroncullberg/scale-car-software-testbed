@@ -76,7 +76,7 @@ public:
     ~EscDriver();
 
     esp_err_t init(const Config& config);
-    esp_err_t start();
+    // esp_err_t start();
     esp_err_t set_throttle(MotorPosition position, uint16_t throttle, bool telemetry = false);
     esp_err_t set_all_throttles(uint16_t throttle, bool telemetry = false);
     esp_err_t set_command(MotorPosition position, DshotCommand command, bool telemetry = false);
@@ -84,8 +84,9 @@ public:
 
 
     bool is_initialized() const { return initialized_; }
-    bool is_started() const { return started_; }
+    // bool is_started() const { return started_; }
     bool is_armed() const { return armed_; }
+    esp_err_t arm_all();
     
     private:
     struct MotorControl {
@@ -99,10 +100,9 @@ public:
     Config config_;
     std::map<MotorPosition, MotorControl> motors_;
     bool initialized_ = false;
-    bool started_ = false;
+    // bool started_ = false;
     bool armed_ = false;
     
     esp_err_t create_rmt_channel(gpio_num_t gpio_num, rmt_channel_handle_t* channel);
     esp_err_t create_encoder(rmt_encoder_handle_t* encoder);
-    esp_err_t arm_all();
 };

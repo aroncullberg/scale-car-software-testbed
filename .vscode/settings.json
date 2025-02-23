@@ -92,6 +92,6 @@
     "C_Cpp.autocomplete": "default",
     "C_Cpp.suggestSnippets": true,
     "C_Cpp.errorSquiggles": "enabled",
-    "idf.portWin": "COM11",
+    "idf.portWin": "COM7",
     "idf.flashType": "UART",
 }

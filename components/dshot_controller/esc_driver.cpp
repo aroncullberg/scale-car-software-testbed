@@ -76,15 +76,15 @@ esp_err_t EscDriver::create_encoder(rmt_encoder_handle_t* encoder) {
     return rmt_new_dshot_esc_encoder(&encoder_config, encoder);
 }
 
-esp_err_t EscDriver::start() {
-    ESP_RETURN_ON_FALSE(initialized_, ESP_ERR_INVALID_STATE, TAG, "Not initialized");
-    ESP_RETURN_ON_FALSE(!started_, ESP_ERR_INVALID_STATE, TAG, "Already started");
+// esp_err_t EscDriver::start() {
+//     ESP_RETURN_ON_FALSE(initialized_, ESP_ERR_INVALID_STATE, TAG, "Not initialized");
+//     ESP_RETURN_ON_FALSE(!started_, ESP_ERR_INVALID_STATE, TAG, "Already started");
 
-    ESP_RETURN_ON_ERROR(arm_all(), TAG, "Failed to arm motors during initializtion");
+//     // ESP_RETURN_ON_ERROR(arm_all(), TAG, "Failed to arm motors during initializtion");
 
-    started_ = true;
-    return ESP_OK;
-}
+//     started_ = true;
+//     return ESP_OK;
+// }
 
 esp_err_t EscDriver::arm_all() {
 
@@ -119,7 +119,7 @@ esp_err_t EscDriver::arm_all() {
 }
 
 esp_err_t EscDriver::set_throttle(MotorPosition position, uint16_t input_throttle, bool telemetry) {
-    ESP_RETURN_ON_FALSE(initialized_ && started_, ESP_ERR_INVALID_STATE, TAG, "Driver not initialized or started");
+    ESP_RETURN_ON_FALSE(initialized_, ESP_ERR_INVALID_STATE, TAG, "Driver not initialized or started");
     ESP_RETURN_ON_FALSE(armed_, ESP_ERR_INVALID_STATE, TAG, "Motors not armed");
     ESP_RETURN_ON_FALSE(input_throttle >= 1000 && input_throttle <= 2000, ESP_ERR_INVALID_ARG, 
         TAG, "Input throttle %hu outside valid range (1000-2000)", input_throttle);

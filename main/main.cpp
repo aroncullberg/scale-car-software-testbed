@@ -19,6 +19,11 @@
 #define TAG "main"
 #endif
 
+void TelemetryTask(void* args) {
+}
+    
+    
+
 extern "C" void app_main(void) {
     // Configure telemetry manager
     // telemetry::TelemetryManager::Config telemetry_config = {
@@ -98,7 +103,7 @@ extern "C" void app_main(void) {
         .esc_config = esc_config,       
         .task_stack_size = 4096,
         .task_priority = 5,
-        .task_period = pdMS_TO_TICKS(2)
+        .task_period = pdMS_TO_TICKS(20)
     };
     
 

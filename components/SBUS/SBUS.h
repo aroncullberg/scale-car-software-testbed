@@ -11,6 +11,7 @@
 
 #define MIN 0
 #define MAX 1
+#define OFFSET 2
 
 namespace sensor {
 
@@ -41,7 +42,7 @@ private:
     
     void processFrame(const uint8_t* frame, size_t len);
     void monitorSignalQuality(); 
-    uint16_t scaleChannelValue(uint16_t raw_value, uint16_t min_raw, uint16_t max_raw);
+    uint16_t scaleChannelValue(uint16_t raw_value, uint8_t ch);
 
     // Task related
     static void sbusTask(void* parameters);
@@ -56,7 +57,7 @@ private:
 
     bool is_running{false};
 
-    static constexpr char* TAG = "SBUS";
+    static constexpr const char* TAG = "SBUS";
 
     // NOTE: Yeah this is uglu but its better than haiving a gian switchstament where this is used, i like it, it stays.
     static constexpr uint16_t CHANNEL_CONFIGS[][2] = {

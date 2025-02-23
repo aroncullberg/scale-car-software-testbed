@@ -57,7 +57,7 @@ esp_err_t SBUS::configureUART() {
     // Install uart driver
     // buffersizes need to be power of 2 (?)
     const int rx_buffer_size  = 512;
-    const int tx_buffer_size = 0;   // We don't transmit
+    const int tx_buffer_size = 0;
 
     err = uart_driver_install(config_t.uart_num,rx_buffer_size,tx_buffer_size,0,NULL,0);
     if (err != ESP_OK) {
@@ -182,7 +182,8 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
     int bit_index = 0;
     
     
-    for (int ch = 0; ch < 16; ch++) {
+    for  (uint8_t ch = 0; ch < static_cast<uint8_t>(SbusChannel::CHANNEL_COUNT); ++ch) {
+
         uint16_t raw_value = 0;
 
         // Extract the 11 bits for channel
@@ -198,11 +199,7 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
             }
         }
 
-        current_data_.channels[ch] = scaleChannelValue(
-            raw_value,
-            CHANNEL_CONFIGS[ch][MIN],
-            CHANNEL_CONFIGS[ch][MAX]
-        );
+        current_data_.channels[ch] = scaleChannelValue(raw_value, ch);
 
         #if CONFIG_SBUS_DEBUG_LOGGING
             if ((ch == 0 || ch == 1) && xTaskGetTickCount() % 100 == 0) {
@@ -220,16 +217,15 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
 }
 
 
-uint16_t SBUS::scaleChannelValue(uint16_t raw_value, uint16_t min_raw, uint16_t max_raw) {
-    // if (raw_value < min_raw) raw_value = min_raw;
-    // if (raw_value > max_raw) raw_value = max_raw;
+uint16_t SBUS::scaleChannelValue(uint16_t raw_value, uint8_t ch) {
+    uint16_t min_raw = CHANNEL_CONFIGS[ch][MIN];
+    uint16_t max_raw = CHANNEL_CONFIGS[ch][MAX];
+
     if (raw_value < min_raw || raw_value > max_raw * 1.1) {
-        return 1000;
-    } else {
-        return 1000 + ((raw_value - min_raw) * 1000) / (max_raw - min_raw);
+        return (ch == 0) ? 1000 : 1500;
     }
     
-    // Scale to 1000-2000 range
+    return std::max(std::min(1000 + ((raw_value - min_raw) * 1000) / (max_raw - min_raw), 2000), 1000);
 }
 
 void SBUS::monitorSignalQuality() {
