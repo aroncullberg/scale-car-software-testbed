@@ -81,9 +81,9 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         float deltaTime = controller->config_.task_period / 1000.0f;
 
         if (sbus_instance.getSbus().quality.valid_signal == false) {
-            if (xTaskGetTickCount() % 100 == 0) {
-                ESP_LOGE(TAG, "Invlaid sbus signal");
-            }
+            // if (xTaskGetTickCount() % 100 == 0) {
+            //     ESP_LOGW(TAG, "Invlaid sbus signal");
+            // }
         } else {
             // controller->updateSteering(sbus_instance.getSbus().channels[ch_steering]);  
             controller->updateGyroAssistance(deltaTime);
@@ -227,7 +227,7 @@ void VehicleDynamicsController::updateGyroAssistance(float deltaTime) {
     // Update target heading based on steering input
     if (fabs(steeringInput) > 0.05f) {  // Small deadzone
         // Change rate proportional to stick deflection
-        float headingChangeRate = steeringInput * 1.5f;  // Adjust multiplier for sensitivity
+        float headingChangeRate = -steeringInput * 1.5f;  // Adjust multiplier for sensitivity
         targetHeading_ += headingChangeRate * deltaTime;
         
         // Normalize target heading
@@ -246,7 +246,7 @@ void VehicleDynamicsController::updateGyroAssistance(float deltaTime) {
     float gyroFactor = gyroConfig_.strength;
     
     // Final steering is a mix of direct control and gyro correction
-    float finalSteering = steeringInput * directFactor + correction * gyroFactor;
+    float finalSteering = steeringInput * directFactor - correction * gyroFactor;
     
     // Clamp to valid range
     if (finalSteering > 1.0f) finalSteering = 1.0f;

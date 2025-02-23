@@ -122,6 +122,8 @@ void SBUS::sbusTask(void* parameters) {
     uint8_t byte;
     TickType_t last_frame_time = xTaskGetTickCount();
 
+    ESP_LOGI(TAG, "sbus task started");
+
     uart_flush(instance->config_t.uart_num);
 
     while (true) {
