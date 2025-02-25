@@ -3,7 +3,7 @@
 #include "gps.h"
 #include "esp_log.h"
 #include <data_pool.h>
-#include <inttypes.h>
+#include <cinttypes>
 
 namespace sensor {
 
@@ -61,7 +61,7 @@ esp_err_t GPS::configureUART() {
                             config_t.rx_buffer_size,  // Larger RX buffer
                             config_t.tx_buffer_size,         // No TX buffer
                             0,         // No event queue
-                            NULL,      // No queue handle
+                            nullptr,      // No queue handle
                             0);        // No interrupt flags
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "UART driver install failed (%d)", err);
@@ -69,7 +69,7 @@ esp_err_t GPS::configureUART() {
     }
 
     // Send UBX command to disable UBX protocol
-    const char* ubx_cfg_prt = "\xB5\x62\x06\x00\x14\x00\x01\x00\x00\x00\xD0\x08\x00\x00\x00\xC2\x01\x00\x07\x00\x01\x00\x00\x00\x00\x00\xC0\x7E";
+    const auto ubx_cfg_prt = "\xB5\x62\x06\x00\x14\x00\x01\x00\x00\x00\xD0\x08\x00\x00\x00\xC2\x01\x00\x07\x00\x01\x00\x00\x00\x00\x00\xC0\x7E";
     uart_write_bytes(config_t.uart_num, ubx_cfg_prt, 28);  // Exact 28-byte UBX packet
 
     // const char* ubx_factory_reset = 
@@ -126,7 +126,7 @@ esp_err_t GPS::stop() {
 }
 
 void GPS::gpsTask(void* parameters) {
-    GPS* gps = static_cast<GPS*>(parameters);
+    const auto gps = static_cast<GPS*>(parameters);
     const uart_port_t uart_num = gps->config_t.uart_num;
     
     // Buffer for reading UART data
@@ -209,7 +209,7 @@ void GPS::processGPSData() {
         ESP_LOGI(TAG, "-----------------------------------");
 
         // Update vehicle data pool
-        ::VehicleData::instance().updateGPS(data);
+        VehicleData::instance().updateGPS(data);
     }
 }
 

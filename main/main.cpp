@@ -1,19 +1,13 @@
-#include <stdio.h>
+// #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include "data_pool.h"
 #include "imu.h"
 #include "SBUS.h"
 #include "gps.h"
-// #include "esp_netif.h"
-#include "telemetry_manager.h"
 #include "servo.h"
 #include "esc_driver.h"
-#include "nvs_flash.h"
-// #include "esp_event.h"
 #include "vdc.h"
-#include "esp_mac.h"
 
 #ifndef TAG
 #define TAG "main"
@@ -21,8 +15,22 @@
 
 void TelemetryTask(void* args) {
 }
-    
-    
+
+// FIXME: Critical issue with memory allocation in buffer overflow scenario - needs immediate attention
+// BUG: Race condition detected when multiple threads access shared resource simultaneously
+// XXX: Temporary patch for compatibility with legacy systems - must be addressed before v2.0
+
+// TODO: Implement proper error handling for network failures
+// TASK: Add unit tests for new features
+// PENDING: Update documentation for API changes
+
+// NOTE: This algorithm has O(n^2) complexity - consider optimization
+// INFO: Configuration must be set in environment variables
+
+// OPTIMIZE: Database query executing full table scan
+// PERF: Heavy computation in main thread - consider moving to background
+// SLOW: Image processing taking too long for large files
+
 
 extern "C" void app_main(void) {
     // Configure telemetry manager
@@ -60,7 +68,7 @@ extern "C" void app_main(void) {
             .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
             .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
             .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
-            .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the defualt is 9600 (which doens't work). Which is why i wont add to kconfig (no im not just lazy)
+            .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
             .rx_buffer_size = 2048,
             .tx_buffer_size = 1024,
         };
@@ -98,20 +106,20 @@ extern "C" void app_main(void) {
     esc_config.motor_pins[EscDriver::MotorPosition::REAR_LEFT] = static_cast<gpio_num_t>(40);
     esc_config.motor_pins[EscDriver::MotorPosition::REAR_RIGHT] = static_cast<gpio_num_t>(41);
 
-    VehicleDynamicsController::Config vd_config = {
+    const VehicleDynamicsController::Config vd_config = {
         .steering_servo = servo_config,
-        .esc_config = esc_config,       
+        .esc_config = esc_config,
         .task_stack_size = 4096,
         .task_priority = 5,
         .task_period = pdMS_TO_TICKS(20)
     };
-    
 
-    VehicleDynamicsController vd_controller(vd_config);
+
+    static VehicleDynamicsController vd_controller(vd_config);
     ESP_ERROR_CHECK(vd_controller.init());
     ESP_ERROR_CHECK(vd_controller.start());
 
-    while(1) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
+    // while(true) {
+    //     vTaskDelay(pdMS_TO_TICKS(1000));
+    // }
 }

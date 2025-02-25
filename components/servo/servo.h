@@ -22,11 +22,11 @@ public:
     Servo& operator=(const Servo&) = delete;
 
     // Set position from -1.0 to 1.0
-    esp_err_t setPosition(uint16_t position);
+    esp_err_t setPosition(uint16_t position) const;
 
 private:
     esp_err_t init();
-    uint32_t calculateCompareValue(uint16_t position) const;
+    static uint32_t calculateCompareValue(uint16_t position) ;
 
     Config config_;
     mcpwm_timer_handle_t timer_{nullptr};

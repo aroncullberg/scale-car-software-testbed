@@ -42,7 +42,7 @@ private:
     
     void processFrame(const uint8_t* frame, size_t len);
     void monitorSignalQuality(); 
-    uint16_t scaleChannelValue(uint16_t raw_value, uint8_t ch);
+    static uint16_t scaleChannelValue(uint16_t raw_value, uint8_t ch);
 
     // Task related
     static void sbusTask(void* parameters);

@@ -17,7 +17,7 @@ public:
 
         // ESC driver configuration
         EscDriver::Config esc_config;
-        
+
         // Task configuration
         uint32_t task_stack_size{4096};
         uint8_t task_priority{5};
@@ -37,7 +37,7 @@ public:
 
 private:
     static constexpr const char* TAG = "VehicleDynamics";
-    
+
     static void controllerTask(void* arg);
     esp_err_t updateSteering(uint16_t steering_position);
     esp_err_t updateThrottle(uint16_t throttle_value);
@@ -47,27 +47,33 @@ private:
     uint32_t lastThrottleActiveTime_{0};
 
     struct {
-        float kP{2.0f};                      // Proportional gain
-        float kI{0.05f};                     // Integral gain
-        float kD{0.1f};                      // Derivative gain
+        float kP{0.2f};                      // Proportional gain
+        float kI{0.00f};                     // Integral gain (bad for drift?)
+        float kD{0.35f};                      // Derivative gain
         float integral{0.0f};                // Integral accumulator
         float previousError{0.0f};           // Previous error for derivative
     } headingPid_;
 
+    struct {
+        float headingChangeRateCoefficent{4.5f};
+    } coefficents_;
+
     // Gyro assistance settings
     struct {
         bool enabled{true};                  // Enable/disable gyro assistance
-        float strength{0.5f};                // Gyro effect strength (0.0-1.0)
-        uint32_t resetTimeoutMs{500};        // Time after throttle cut to reset reference
+        float strength{0.65f};                // Gyro effect strength (0.0-1.0)
+        uint32_t resetTimeoutMs{800};        // Time after throttle cut to reset reference
     } gyroConfig_;
 
     // Helper methods
-    Quaternion getCurrentOrientation();
-    float calculateHeadingError();
+    static Quaternion getCurrentOrientation(const sensor::ImuData& imu_data);
+    float calculateHeadingError(const sensor::ImuData& imu_data) const;
     float computePID(float error, float deltaTime);
-    void updateReferenceOrientation();
-    void updateGyroAssistance(float deltaTime);
-    
+    void updateReferenceOrientation(const sensor::SbusData& sbus_data,
+                                                         const sensor::ImuData& imu_data);
+    void updateGyroAssistance(float deltaTime, const sensor::SbusData& sbus_data,
+                                                         const sensor::ImuData& imu_data);
+
 
     Config config_;
     Servo steering_servo_;

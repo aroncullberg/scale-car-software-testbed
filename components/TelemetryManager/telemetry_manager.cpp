@@ -7,7 +7,7 @@
 #include "esp_mac.h"
 #include "esp_now.h"
 #include "nvs_flash.h"
-#include "inttypes.h"
+#include <cinttypes>
 #include "system_monitor.h"
 // #include "imu.h"
 // #include "gps.h"
@@ -23,12 +23,12 @@ struct TextMessageData {
 
 struct TelemetryQueueItem{
     TelemetryManager::PacketType type;
-    uint32_t timestamp;
+    uint32_t timestamp{};
     union PacketData {
         sensor::ImuData imu;
         sensor::GpsData gps;
         sensor::SbusData sbus;
-        TextMessageData text;
+        TextMessageData text{};
         CompactSystemStats compact_stats;
         PacketData() {} // union constructor fuckery
     } data;

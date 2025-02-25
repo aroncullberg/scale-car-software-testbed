@@ -22,3 +22,10 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 set(MINIMUM_ESP_IDF_VERSION "v5.4")
 
 project(fulltech)
+
+add_custom_target(build_flash_monitor
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target app
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target flash
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target monitor
+        COMMENT "Building, flashing and monitoring..."
+)

@@ -116,10 +116,8 @@ esp_err_t IMU::configureIMU() {
     }
 
     // Configure sensors for continuous mode
-    icm20948_internal_sensor_id_bm sensors = (icm20948_internal_sensor_id_bm)(
-        ICM_20948_INTERNAL_ACC | ICM_20948_INTERNAL_GYR
-    );
-    
+    constexpr auto sensors = static_cast<icm20948_internal_sensor_id_bm>(ICM_20948_INTERNAL_ACC | ICM_20948_INTERNAL_GYR);
+
     if (icm20948_set_sample_mode(&icm_device_, sensors, SAMPLE_MODE_CONTINUOUS) != ICM_20948_STAT_OK) {
         ESP_LOGE(TAG, "Failed to set sample mode");
         return ESP_FAIL;
@@ -354,7 +352,7 @@ esp_err_t IMU::stop() {
 }
 
 void IMU::imuTask(void* parameters) {
-    IMU* instance = static_cast<IMU*>(parameters);
+    const auto instance = static_cast<IMU*>(parameters);
     TickType_t last_wake_time = xTaskGetTickCount();
     icm_20948_DMP_data_t dmp_data;
 

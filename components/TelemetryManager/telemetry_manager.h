@@ -86,9 +86,9 @@ private:
     static void espNowReceiveCallback(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
 
     esp_err_t initEspNow();
-    esp_err_t initWifi();
-    esp_err_t initNVS(); // NOTE: this is requried for wifi (unsure if espnow needs it but i would guess so)
-    esp_err_t initNetworking(); // NOTE: This is requried for espnow/wifi
+    static esp_err_t initWifi();
+    static esp_err_t initNVS(); // NOTE: this is requried for wifi (unsure if espnow needs it but i would guess so)
+    static esp_err_t initNetworking(); // NOTE: This is requried for espnow/wifi
     esp_err_t transmitPacket(const void* data, size_t len);
 
     bool wirelessLogging() const {

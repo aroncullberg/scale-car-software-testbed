@@ -7,10 +7,10 @@
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
 #include "esp_log.h"
-#include <string.h>
+#include <cstring>
 // #include "esp_cpu.h"
 
-static const char* TAG = "SysMonitor";
+static auto TAG = "SysMonitor";
 
 esp_err_t SystemMonitor::init(const Config& config) {
     if (is_running_) {
@@ -66,7 +66,7 @@ SystemStats SystemMonitor::getStats() const {
 }
 
 void SystemMonitor::monitorTask(void* params) {
-    SystemMonitor* monitor = static_cast<SystemMonitor*>(params);
+    auto* monitor = static_cast<SystemMonitor*>(params);
     TickType_t last_wake_time = xTaskGetTickCount();
 
     while (true) {
@@ -95,8 +95,8 @@ void SystemMonitor::updateStats() {
     // size_t total_blocks = heap_caps_get_num_free_blocks(MALLOC_CAP_DEFAULT) + 
     //                      heap_caps_get_allocated_size(MALLOC_CAP_DEFAULT);
                             // Replace the fragmentation calculation with this:
-    size_t total_free = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
-    size_t largest_free_block = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+    const size_t total_free = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+    const size_t largest_free_block = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
     current_stats_.heap_fragmentation = static_cast<uint8_t>(100 - (largest_free_block * 100) / total_free);
     // current_stats_.heap_fragmentation = static_cast<uint8_t>((free_blocks * 100) / total_blocks);
 

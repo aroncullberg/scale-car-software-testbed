@@ -59,7 +59,7 @@ esp_err_t SBUS::configureUART() {
     const int rx_buffer_size  = 512;
     const int tx_buffer_size = 0;
 
-    err = uart_driver_install(config_t.uart_num,rx_buffer_size,tx_buffer_size,0,NULL,0);
+    err = uart_driver_install(config_t.uart_num,rx_buffer_size,tx_buffer_size,0,nullptr,0);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "UART driver installation failed");
         return err;
@@ -116,7 +116,7 @@ esp_err_t SBUS::stop() {
 }
 
 void SBUS::sbusTask(void* parameters) {
-    SBUS* instance = static_cast<SBUS*>(parameters);
+    const auto instance = static_cast<SBUS*>(parameters);
     const uint8_t start_byte = 0x0F;
     const uint8_t end_byte = 0x00;
     uint8_t byte;

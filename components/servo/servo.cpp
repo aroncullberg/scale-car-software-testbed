@@ -117,23 +117,24 @@ esp_err_t Servo::init() {
 //     return 3000 - position;
 // }
 
-uint32_t Servo::calculateCompareValue(uint16_t position) const {
+uint32_t Servo::calculateCompareValue(uint16_t position) {
     // Clamp the position to the valid range
     // TODO: make this error and return instead
-    position = std::max(uint16_t(CONFIG_SERVO_MIN_PULSE_WIDTH_US), 
-                       std::min(uint16_t(CONFIG_SERVO_MAX_PULSE_WIDTH_US), position));
-    
-    uint32_t scaled = CONFIG_SERVO_MIN_PULSE_WIDTH_US + 
-                     ((position - CONFIG_SERVO_MIN_PULSE_WIDTH_US) * 
-                      (CONFIG_SERVO_MAX_PULSE_WIDTH_US - CONFIG_SERVO_MIN_PULSE_WIDTH_US)) / 
+    position = std::max(static_cast<uint16_t>(CONFIG_SERVO_MIN_PULSE_WIDTH_US),
+                       std::min(static_cast<uint16_t>(CONFIG_SERVO_MAX_PULSE_WIDTH_US), position));
+
+    const uint32_t scaled = CONFIG_SERVO_MIN_PULSE_WIDTH_US +
+                     (position - CONFIG_SERVO_MIN_PULSE_WIDTH_US) *
+                     (CONFIG_SERVO_MAX_PULSE_WIDTH_US - CONFIG_SERVO_MIN_PULSE_WIDTH_US) /
                      (CONFIG_SERVO_MAX_PULSE_WIDTH_US - CONFIG_SERVO_MIN_PULSE_WIDTH_US);
 
     // Apply offset
-    return scaled + CONFIG_SERVO_OFFSET;
+    return CONFIG_SERVO_MIN_PULSE_WIDTH_US + CONFIG_SERVO_MAX_PULSE_WIDTH_US -
+           (scaled + CONFIG_SERVO_OFFSET);
 }
 
 
-esp_err_t Servo::setPosition(uint16_t position) {
+esp_err_t Servo::setPosition(const uint16_t position) const {
     // ESP_LOGI(TAG, "%d -> %d", position,  static_cast<int>(calculateCompareValue(position)));
     // return ESP_OK;
 
