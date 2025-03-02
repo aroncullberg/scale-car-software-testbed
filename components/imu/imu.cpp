@@ -317,13 +317,14 @@ esp_err_t IMU::start() {
         return ESP_ERR_INVALID_STATE;
     }
 
-    BaseType_t task_created = xTaskCreate(
+    BaseType_t task_created = xTaskCreatePinnedToCore(
         imuTask,
         "imu_task",
         4096,
         this,
         5,
-        &task_handle_
+        &task_handle_,
+        1
     );
 
     if (task_created != pdPASS) {

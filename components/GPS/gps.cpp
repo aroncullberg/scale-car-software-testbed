@@ -91,13 +91,14 @@ esp_err_t GPS::start() {
         return ESP_ERR_INVALID_STATE;
     }
 
-    BaseType_t task_created = xTaskCreate(
+    BaseType_t task_created = xTaskCreatePinnedToCore(
         gpsTask,                           // task function
         "gps_task",                        // task name
         4096,        // stack size (Kconfig)
         this,                               // ???
         5,          // Task priority (Kconfig)
-        &task_handle_                       // self explanatory 
+        &task_handle_,                       // self explanatory 
+        1
     );
 
     if (task_created != pdPASS) {
