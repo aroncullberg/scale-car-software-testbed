@@ -92,7 +92,7 @@ esp_err_t EscDriver::arm_all() {
         ESP_LOGI(TAG, "Arming: %d", static_cast<uint16_t>(position));
         // set_command(position, EscDriver::DshotCommand::MOTOR_STOP, false);
         dshot_esc_throttle_t frame = {
-            .throttle = 0,
+            .throttle = 48,
             .telemetry_req = false
         };
 
@@ -103,6 +103,9 @@ esp_err_t EscDriver::arm_all() {
                 .queue_nonblocking = false
             }
         };
+
+        ESP_RETURN_ON_ERROR(rmt_disable(motor.channel), TAG, "Failed to disable channel");
+        ESP_RETURN_ON_ERROR(rmt_enable(motor.channel), TAG, "Failed to re-enable channel");
 
         ESP_RETURN_ON_ERROR(
             rmt_transmit(motor.channel, motor.encoder, &frame, sizeof(frame), &transmit_config),

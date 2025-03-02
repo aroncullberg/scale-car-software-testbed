@@ -24,8 +24,8 @@ public:
         BEEP4 = 4,                                   // Wait at least length of beep (260ms) before next command
         BEEP5 = 5,                                   // Wait at least length of beep (260ms) before next command
         ESC_INFO = 6,                                // Wait at least 12ms before next command
-        SPIN_DIRECTION_1 = 7,                        // Need 6x
-        SPIN_DIRECTION_2 = 8,                        // Need 6x
+        SPIN_DIRECTION_1 = 7,                        // Need 6x, note this is for if you want tosave to emprom
+        SPIN_DIRECTION_2 = 8,                        // Need 6x, note this is for if you want tosave to emprom
         MODE_3D_OFF = 9,                             // Need 6x
         MODE_3D_ON = 10,                             // Need 6x
         SETTINGS_REQUEST = 11,                       // Currently not implemented
@@ -35,8 +35,8 @@ public:
         
         // 15-19 not yet assigned
         
-        SPIN_DIRECTION_NORMAL = 20,                  // Need 6x
-        SPIN_DIRECTION_REVERSED = 21,                // Need 6x
+        SPIN_DIRECTION_NORMAL = 20,                  // Need 6x, note: this is for temprorary spin reversal
+        SPIN_DIRECTION_REVERSED = 21,                // Need 6x, note: this is for temprorary spin reversal
         LED0_ON = 22,
         LED1_ON = 23,
         LED2_ON = 24,

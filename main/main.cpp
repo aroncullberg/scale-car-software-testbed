@@ -8,13 +8,11 @@
 #include "servo.h"
 #include "esc_driver.h"
 #include "vdc.h"
+#include "log_monitor.h"
 
 #ifndef TAG
 #define TAG "main"
 #endif
-
-void TelemetryTask(void* args) {
-}
 
 // FIXME: Critical issue with memory allocation in buffer overflow scenario - needs immediate attention
 // BUG: Race condition detected when multiple threads access shared resource simultaneously
@@ -32,64 +30,58 @@ void TelemetryTask(void* args) {
 // SLOW: Image processing taking too long for large files
 
 
-extern "C" void app_main(void) {
-    // Configure telemetry manager
-    // telemetry::TelemetryManager::Config telemetry_config = {
-    //     .peer_mac = {0xDC, 0xDA, 0x0C, 0x2A, 0x17, 0xD8},
-    //     .queue_size = 16,
-    //     .task_period = pdMS_TO_TICKS(10),
-    //     .fetcher_period = pdMS_TO_TICKS(20),
-    //     .esp_now_channel = 0,
-    //     .task_priority = 5,
-    //     .fetcher_priority = 5,
-    //     .task_stack_size = 4096,
-    //     .fetcher_stack_size = 4096
-    // };
+extern "C" [[noreturn]] void app_main(void) {
+    LogMonitor::Config log_config;
+    log_config.ap_ssid = "ESP32-Monitor";
+    log_config.ap_password = "password";
+    log_config.tcp_port = 8888;
 
-    // ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().init(telemetry_config));
-    // ESP_ERROR_CHECK(telemetry::TelemetryManager::instance().start());
-    vTaskDelay(pdMS_TO_TICKS(500));
+    LogMonitor::instance().init(log_config);
+    LogMonitor::instance().start();
 
-    #if CONFIG_SBUS_ENABLE
-        sensor::SBUS::Config sbus_config = {
-            .uart_num = static_cast<uart_port_t>(CONFIG_SBUS_UART_NUM),        
-            .uart_tx_pin = GPIO_NUM_17,    
-            .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_SBUS_UART_RX),    
-            .baud_rate = 100000            // SBUS runs at 100k baud
-        };
-        static sensor::SBUS sbus(sbus_config);
-        ESP_ERROR_CHECK(sbus.init());
-        ESP_ERROR_CHECK(sbus.start());
-    #endif
+    ESP_LOGI("main", "Log monitor started! Connect to WiFi SSID: %s", log_config.ap_ssid);
+    ESP_LOGI("main", "Use 'nc YOUR_ESP_IP 8888' to view logs");
+
+    // #if CONFIG_SBUS_ENABLE
+    //     sensor::SBUS::Config sbus_config = {
+    //         .uart_num = static_cast<uart_port_t>(CONFIG_SBUS_UART_NUM),        
+    //         .uart_tx_pin = GPIO_NUM_17,    
+    //         .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_SBUS_UART_RX),    
+    //         .baud_rate = 100000            // SBUS runs at 100k baud
+    //     };
+    //     static sensor::SBUS sbus(sbus_config);
+    //     ESP_ERROR_CHECK(sbus.init());
+    //     ESP_ERROR_CHECK(sbus.start());
+    // #endif
 
 
-    #if CONFIG_GPS_ENABLE
-        sensor::GPS::Config gps_config = {
-            .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
-            .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
-            .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
-            .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
-            .rx_buffer_size = 2048,
-            .tx_buffer_size = 1024,
-        };
-        static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
-        ESP_ERROR_CHECK(gps.init());
-        ESP_ERROR_CHECK(gps.start());
-    #endif
+    // #if CONFIG_GPS_ENABLE
+    //     sensor::GPS::Config gps_config = {
+    //         .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
+    //         .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
+    //         .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
+    //         .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
+    //         .rx_buffer_size = 2048,
+    //         .tx_buffer_size = 1024,
+    //     };
+    //     static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
+    //     ESP_ERROR_CHECK(gps.init());
+    //     ESP_ERROR_CHECK(gps.start());
+    // #endif
 
 
-    #if CONFIG_IMU_ENABLE
-        sensor::IMU::Config imu_config = {
-            .spi_host = SPI2_HOST,
-            .spi_miso_pin = CONFIG_IMU_SPI_MISO,
-            .spi_mosi_pin = CONFIG_IMU_SPI_MOSI,
-            .spi_sck_pin = CONFIG_IMU_SPI_CLK,
-            .spi_cs_pin = CONFIG_IMU_SPI_CS,
-        };
-        static sensor::IMU imu(imu_config);
-        ESP_ERROR_CHECK(imu.init());
-        ESP_ERROR_CHECK(imu.start());
-    #endif
+    // #if CONFIG_IMU_ENABLE
+    //     sensor::IMU::Config imu_config = {
+    //         .spi_host = SPI2_HOST,
+    //         .spi_miso_pin = CONFIG_IMU_SPI_MISO,
+    //         .spi_mosi_pin = CONFIG_IMU_SPI_MOSI,
+    //         .spi_sck_pin = CONFIG_IMU_SPI_CLK,
+    //         .spi_cs_pin = CONFIG_IMU_SPI_CS,
+    //     };
+    //     static sensor::IMU imu(imu_config);
+    //     ESP_ERROR_CHECK(imu.init());
+    //     ESP_ERROR_CHECK(imu.start());
+    // #endif
     
     // Configure the steering servo
     Servo::Config servo_config = {
@@ -119,7 +111,8 @@ extern "C" void app_main(void) {
     ESP_ERROR_CHECK(vd_controller.init());
     ESP_ERROR_CHECK(vd_controller.start());
 
-    // while(true) {
-    //     vTaskDelay(pdMS_TO_TICKS(1000));
-    // }
+    while(true) {
+        ESP_LOGI("app_main", "Main loop running...");
+        vTaskDelay(pdMS_TO_TICKS(10000));
+    }
 }

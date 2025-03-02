@@ -1,6 +1,7 @@
 #include "vdc.h"
 
 #include <sys/stat.h>
+#include <inttypes.h>
 
 #include "esp_log.h"
 #include "esp_check.h"
@@ -29,17 +30,32 @@ esp_err_t VehicleDynamicsController::start() {
     if (is_running_) {
         return ESP_OK;
     }
-    const BaseType_t ret = xTaskCreate(
-        controllerTask,
-        "veh_dynamics",
-        config_.task_stack_size,
-        this,
-        config_.task_priority,
-        &task_handle_
-    );
 
-    ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_FAIL, TAG, "Failed to create task");
-     
+    esc_driver_.arm_all();
+    ESP_LOGI(TAG, "Arming ESCs");
+
+    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
+    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
+    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
+    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
+    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
+    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
+    esc_driver_.set_all_throttles(1100, false);
+    // esc_driver_.set_throttle(EscDriver::MotorPosition::REAR_LEFT, 1030, false);
+    ESP_LOGI(TAG, "Setting throttle to 1050");
+
+    // const BaseType_t ret = xTaskCreatePinnedToCore(
+    //     controllerTask,
+    //     "veh_dynamics",
+    //     config_.task_stack_size,
+    //     this,
+    //     config_.task_priority,
+    //     &task_handle_,
+    //     1
+    // );
+    //
+    // ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_FAIL, TAG, "Failed to create task");
+    //
     is_running_ = true;
     return ESP_OK;
 }
@@ -75,10 +91,10 @@ namespace {
 
     // Process a tristate switch input
     // Returns: -1 for decrease, 0 for no change, 1 for increase
-    int processTristate(uint16_t channel_value) {
+    int processTristate(const uint16_t channel_value) {
         if (channel_value < 1300) return -1;      // Low position
-        else if (channel_value > 1700) return 1;  // High position
-        else return 0;                            // Middle position
+        if (channel_value > 1700) return 1;  // High position
+        return 0;
     }
 }
 
@@ -93,13 +109,14 @@ void VehicleDynamicsController::controllerTask(void* arg) {
     const VehicleData &vehicle_data = VehicleData::instance();
 
     constexpr auto ch_throttle = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
-    // constexpr auto ch_steering = static_cast<size_t>(sensor::SbusChannel::STEERING);
+    constexpr auto ch_steering = static_cast<size_t>(sensor::SbusChannel::STEERING);
     constexpr auto ch_turnrate = static_cast<size_t>(sensor::SbusChannel::AUX1);
     constexpr auto ch_gyro_strength = static_cast<size_t>(sensor::SbusChannel::AUX2);
     constexpr auto ch_kp = static_cast<size_t>(sensor::SbusChannel::AUX3);
     constexpr auto ch_kd = static_cast<size_t>(sensor::SbusChannel::AUX4);
     constexpr auto ch_ki = static_cast<size_t>(sensor::SbusChannel::AUX5);
     constexpr auto ch_reset_timeout = static_cast<size_t>(sensor::SbusChannel::AUX6);
+    constexpr auto toggle_pidloop = static_cast<size_t>(sensor::SbusChannel::AUX7);
 
     uint16_t prev_ch_values[16] = {};
     std::ranges::fill(prev_ch_values, 1500);
@@ -143,10 +160,10 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         int kp_adj = processTristate(sbus_data.channels[ch_kp]);
         if (kp_adj != 0) {
             constexpr float kp_adj_rate = 0.01f;
-            float new_kp = controller->headingPid_.kP + static_cast<float>(kp_adj) * kp_adj_rate * deltaTime;
+            float new_kp = controller->headingPid_.kP + static_cast<float>(kp_adj) * kp_adj_rate;
             // Clamp to reasonable range
-            if (new_kp < 0.0f) new_kp = 0.0f;
-            if (new_kp > 1.0f) new_kp = 1.0f;
+            if (new_kp <= 0.0f) new_kp = 0.0f;
+            if (new_kp >= 10.0f) new_kp = 10.0f;
 
             if (fabsf(new_kp - controller->headingPid_.kP) > 0.001f) {
                 ESP_LOGI(TAG, "kP changed: %.3f -> %.3f (adj: %d)",
@@ -159,10 +176,10 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         int ki_adj = processTristate(sbus_data.channels[ch_ki]);
         if (ki_adj != 0) {
             constexpr float ki_adj_rate = 0.001f;
-            float new_ki = controller->headingPid_.kI + static_cast<float>(ki_adj) * ki_adj_rate * deltaTime;
+            float new_ki = controller->headingPid_.kI + static_cast<float>(ki_adj) * ki_adj_rate;
             // Clamp to reasonable range
-            if (new_ki < 0.0f) new_ki = 0.0f;
-            if (new_ki > 0.1f) new_ki = 0.1f;
+            if (new_ki <= 0.0f) new_ki = 0.0f;
+            if (new_ki >= 2.0f) new_ki = 2.0f;
 
             if (fabsf(new_ki - controller->headingPid_.kI) > 0.0001f) {
                 ESP_LOGI(TAG, "kI changed: %.4f -> %.4f (adj: %d)",
@@ -175,10 +192,10 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         int kd_adj = processTristate(sbus_data.channels[ch_kd]);
         if (kd_adj != 0) {
             constexpr float kd_adj_rate = 0.01f;
-            float new_kd = controller->headingPid_.kD + kd_adj * kd_adj_rate * deltaTime;
+            float new_kd = controller->headingPid_.kD + kd_adj * kd_adj_rate;
             // Clamp to reasonable range
-            if (new_kd < 0.0f) new_kd = 0.0f;
-            if (new_kd > 1.0f) new_kd = 1.0f;
+            if (new_kd <= 0.0f) new_kd = 0.0f;
+            if (new_kd >= 2.0f) new_kd = 2.0f;
 
             if (fabsf(new_kd - controller->headingPid_.kD) > 0.001f) {
                 ESP_LOGI(TAG, "kD changed: %.3f -> %.3f (adj: %d)",
@@ -192,21 +209,30 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         if (timeout_adj != 0) {
             constexpr float timeout_adj_rate = 50.0f;
             uint32_t new_timeout = controller->gyroConfig_.resetTimeoutMs +
-                                   timeout_adj * static_cast<int>(timeout_adj_rate * deltaTime);
+                                   timeout_adj * static_cast<int>(timeout_adj_rate);
             // Clamp to reasonable range
             if (new_timeout < 100) new_timeout = 100;
             if (new_timeout > 5000) new_timeout = 5000;
 
             if (new_timeout != controller->gyroConfig_.resetTimeoutMs) {
-                ESP_LOGI(TAG, "Reset timeout changed: %u -> %u ms (adj: %d)",
-                        controller->gyroConfig_.resetTimeoutMs, new_timeout, timeout_adj);
+                ESP_LOGI(TAG, "Reset timeout changed: %" PRIu32 " -> %" PRIu32 " ms (adj: %d)",
+                         controller->gyroConfig_.resetTimeoutMs, new_timeout, timeout_adj);
                 controller->gyroConfig_.resetTimeoutMs = new_timeout;
             }
         }
 
+
+
         // NOTE: This is the steering thing, stupid name i know
         // TODO: Change to a more descriptive name
-        controller->updateGyroAssistance(deltaTime, sbus_data, imu_data);
+
+        if (sbus_data.channels[toggle_pidloop] < 1600) {
+            controller->updateGyroAssistance(deltaTime, sbus_data, imu_data);
+            // ESP_LOGI(TAG, "PID loop enabled");
+        } else {
+            controller->updateSteering(sbus_data.channels[ch_steering]);
+            // ESP_LOGI(TAG, "PID loop disabled");
+        }
 
         const uint16_t throttle_value = sbus_data.channels[ch_throttle];
         const bool is_armed = controller->esc_driver_.is_armed();
@@ -238,6 +264,10 @@ void VehicleDynamicsController::controllerTask(void* arg) {
 
 esp_err_t VehicleDynamicsController::updateThrottle(uint16_t throttle_value) {
     return esc_driver_.set_all_throttles(throttle_value);
+}
+
+esp_err_t VehicleDynamicsController::updateSteering(uint16_t steering_value) {
+    return steering_servo_.setPosition(steering_value);
 }
 
 Quaternion VehicleDynamicsController::getCurrentOrientation(const sensor::ImuData& imu_data) {

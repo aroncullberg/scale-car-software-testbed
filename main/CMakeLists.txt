@@ -10,11 +10,11 @@ idf_component_register(
         "SBUS"
         "GPS"
         "imu"
-        "TelemetryManager"
         "dshot_controller"
         "vdc"
+        "log_monitor"
         "servo"
-        "nvs_flash"
+#        "nvs_flash"
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE 

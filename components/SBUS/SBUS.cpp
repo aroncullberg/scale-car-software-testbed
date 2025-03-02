@@ -81,13 +81,14 @@ esp_err_t SBUS::start() {
         return ESP_ERR_INVALID_STATE;
     }
 
-    BaseType_t task_created = xTaskCreate(
+    BaseType_t task_created = xTaskCreatePinnedToCore(
         sbusTask,                           // task function
         "sbus_task",                        // task name
         4096,                               // stack
         this,                               // ???
         5,                                  // Task priority 
-        &task_handle_                       // self explanatory 
+        &task_handle_ ,                      // self explanatory 
+        1
     );
 
     if (task_created != pdPASS) {
@@ -202,7 +203,7 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
         current_data_.channels[ch] = scaleChannelValue(raw_value, ch);
 
         #if CONFIG_SBUS_DEBUG_LOGGING
-            if ((ch == 0 || ch == 1) && xTaskGetTickCount() % 100 == 0) {
+            if ((ch == 0 || ch == 1 || ch == 2 || ch == 3 || ch == 4 || ch == 5 || ch == 6 || ch == 7 || ch == 8) && xTaskGetTickCount() % 100 == 0) {
                 ESP_LOGI(TAG, "CH%d: Raw=%4d, Scaled=%4d", 
                         ch, 
                         raw_value, 

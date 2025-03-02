@@ -39,7 +39,7 @@ private:
     static constexpr const char* TAG = "VehicleDynamics";
 
     static void controllerTask(void* arg);
-    esp_err_t updateSteering(uint16_t steering_position);
+    esp_err_t updateSteering(uint16_t steering_value);
     esp_err_t updateThrottle(uint16_t throttle_value);
 
     Quaternion referenceOrientation_;
@@ -47,9 +47,10 @@ private:
     uint32_t lastThrottleActiveTime_{0};
 
     struct {
-        float kP{0.2f};                      // Proportional gain
-        float kI{0.00f};                     // Integral gain (bad for drift?)
-        float kD{0.35f};                      // Derivative gain
+        float kP{2.0f};                      // Proportional gain
+        float kI{0.05f};                     // Integral gain
+        float kD{0.1f};                      // Derivative gain
+
         float integral{0.0f};                // Integral accumulator
         float previousError{0.0f};           // Previous error for derivative
     } headingPid_;
@@ -79,5 +80,6 @@ private:
     Servo steering_servo_;
     EscDriver esc_driver_;
     TaskHandle_t task_handle_{nullptr};
+    bool pid_enabled_{true};
     bool is_running_{false};
 };

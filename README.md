@@ -1,13 +1,26 @@
 # High-Performance RC Car Project
 
-## Overview
-An advanced electric vehicle platform featuring torque vectoring, high-speed capabilities (200+ km/h), and comprehensive sensor integration (some features still under development). Built using the ESP-IDF v5.4 toolchain with C++, this project combines sophisticated hardware control with real-time telemetry and sensor fusion.
+# Disclamer: This repo is mostly for us to have a log of what we have done, as such there will not be any help with reproducing the project.
 
 
 <p align="center">
-  <img src="image.png" width="45%" />
-  <img src="image.png" width="45%" />
+  <img src="resources/image.png" width="45%" />
+  <img src="resources/20250221_143342.jpg" width="45%" />
 </p>
+
+
+<p align="center">
+  <img src="resources/20250228_143838.jpg" width="45%" />
+  <img src="resources/20250227_154445.mp4" width="45%" />
+</p>
+
+<p align="center">
+  <img src="resources/20250216_145429.jpg" width="45%" />
+  <img src="resources/20250221_111822.mp4" width="45%" />
+</p>
+
+## Overview
+An advanced electric vehicle platform featuring torque vectoring, high-speed capabilities (200+ km/h), and comprehensive sensor integration (some features still under development). Built using the ESP-IDF v5.4 toolchain with C++, this project combines sophisticated hardware control with real-time telemetry and sensor fusion.
 
 
 ## Background
@@ -15,35 +28,58 @@ Back in early 2024, we stumbled upon a YouTube video series from [@Indeterminate
 
 Our approach focused on using cost-effective electronics and sensors and that when it would inevidbly come back to bite us we would be able to solve it "*in software*".
 
-## Getting Started
+[//]: # (## Getting Started)
 
-### Prerequisites
-- ESP-IDF v5.4 or newer
-- C++ compiler supporting C++17
-- CMake 3.16+
-- Git with LFS support
-- Python 3.8+
+[//]: # ()
+[//]: # (### Prerequisites)
 
-### Installation
+[//]: # (- ESP-IDF v5.4 or newer)
 
-1. Clone the repository with submodules:
-```bash
-git clone --recursive <link>
-cd <directory>
-git submodule update --init --recursive
-```
+[//]: # (- C++ compiler supporting C++17)
 
-2. Configure the build:
-```bash
-idf.py set-target esp32s3
-idf.py menuconfig
-```
+[//]: # (- CMake 3.16+)
 
-3. Build and flash:
-```bash
-idf.py build
-idf.py -p [PORT] flash monitor
-```
+[//]: # (- Git with LFS support)
+
+[//]: # (- Python 3.8+)
+
+[//]: # ()
+[//]: # (### Installation)
+
+[//]: # ()
+[//]: # (1. Clone the repository with submodules:)
+
+[//]: # (```bash)
+
+[//]: # (git clone --recursive <link>)
+
+[//]: # (cd <directory>)
+
+[//]: # (git submodule update --init --recursive)
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (2. Configure the build:)
+
+[//]: # (```bash)
+
+[//]: # (idf.py set-target esp32s3)
+
+[//]: # (idf.py menuconfig)
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (3. Build and flash:)
+
+[//]: # (```bash)
+
+[//]: # (idf.py build)
+
+[//]: # (idf.py -p [PORT] flash monitor)
+
+[//]: # (```)
 
 ### Project Structure
 ```
@@ -124,9 +160,14 @@ This project represents over 1000 hours of combined development effort, though n
   - Managed hardware assembly and optimization
   - Designed and implemented physical components
 
-### Additional Acknowledgments
-- Jonathan Vestin for perspective on FPGA programming challenges and assistance with university 3D printing resources
-- IndeterminateDesign for inspiration through their hypercar project
-- Claude 3.5 Sonnet for development assistance
-<!-- - Open-source community contributors -->
-<!-- - Various repository maintainers whose work contributed to this project -->
+[//]: # (### Additional Acknowledgments)
+
+[//]: # (- Jonathan Vestin for perspective on FPGA programming challenges and assistance with university 3D printing resources)
+
+[//]: # (- IndeterminateDesign for inspiration through their hypercar project)
+
+[//]: # (- Claude 3.5 Sonnet for development assistance)
+
+[//]: # (<!-- - Open-source community contributors -->)
+
+[//]: # (<!-- - Various repository maintainers whose work contributed to this project -->)
