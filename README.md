@@ -2,6 +2,7 @@
 
 # Disclamer: This repo is mostly for us to have a log of what we have done, as such there will not be any help with reproducing the project.
 
+![Video](resources/20250227_154445.mp4)
 
 <p align="center">
   <img src="resources/image.png" width="45%" />
@@ -11,13 +12,11 @@
 
 <p align="center">
   <img src="resources/20250228_143838.jpg" width="45%" />
-  <img src="resources/20250227_154445.mp4" width="45%" />
+  <img src="resources/20250216_145429.jpg" width="45%" />
 </p>
 
-<p align="center">
-  <img src="resources/20250216_145429.jpg" width="45%" />
-  <img src="resources/20250221_111822.mp4" width="45%" />
-</p>
+
+
 
 ## Overview
 An advanced electric vehicle platform featuring torque vectoring, high-speed capabilities (200+ km/h), and comprehensive sensor integration (some features still under development). Built using the ESP-IDF v5.4 toolchain with C++, this project combines sophisticated hardware control with real-time telemetry and sensor fusion.
