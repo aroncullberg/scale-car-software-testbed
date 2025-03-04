@@ -66,7 +66,6 @@ private:
         uint32_t resetTimeoutMs{800};        // Time after throttle cut to reset reference
     } gyroConfig_;
 
-    // Helper methods
     static Quaternion getCurrentOrientation(const sensor::ImuData& imu_data);
     float calculateHeadingError(const sensor::ImuData& imu_data) const;
     float computePID(float error, float deltaTime);
@@ -80,6 +79,8 @@ private:
     Servo steering_servo_;
     EscDriver esc_driver_;
     TaskHandle_t task_handle_{nullptr};
+
     bool pid_enabled_{true};
     bool is_running_{false};
+    bool arm_switch_enabled_{false};
 };

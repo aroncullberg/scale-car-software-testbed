@@ -31,31 +31,18 @@ esp_err_t VehicleDynamicsController::start() {
         return ESP_OK;
     }
 
-    esc_driver_.arm_all();
-    ESP_LOGI(TAG, "Arming ESCs");
+    const BaseType_t ret = xTaskCreatePinnedToCore(
+        controllerTask,
+        "veh_dynamics",
+        config_.task_stack_size,
+        this,
+        config_.task_priority,
+        &task_handle_,
+        1
+    );
 
-    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
-    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
-    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
-    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
-    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
-    // esc_driver_.set_all_commands(EscDriver::DshotCommand::SPIN_DIRECTION_REVERSED, false);
-    esc_driver_.set_all_throttles(1100, false);
-    // esc_driver_.set_throttle(EscDriver::MotorPosition::REAR_LEFT, 1030, false);
-    ESP_LOGI(TAG, "Setting throttle to 1050");
+    ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_FAIL, TAG, "Failed to create task");
 
-    // const BaseType_t ret = xTaskCreatePinnedToCore(
-    //     controllerTask,
-    //     "veh_dynamics",
-    //     config_.task_stack_size,
-    //     this,
-    //     config_.task_priority,
-    //     &task_handle_,
-    //     1
-    // );
-    //
-    // ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_FAIL, TAG, "Failed to create task");
-    //
     is_running_ = true;
     return ESP_OK;
 }
@@ -117,6 +104,9 @@ void VehicleDynamicsController::controllerTask(void* arg) {
     constexpr auto ch_ki = static_cast<size_t>(sensor::SbusChannel::AUX5);
     constexpr auto ch_reset_timeout = static_cast<size_t>(sensor::SbusChannel::AUX6);
     constexpr auto toggle_pidloop = static_cast<size_t>(sensor::SbusChannel::AUX7);
+    constexpr auto arm_switch = static_cast<size_t>(sensor::SbusChannel::AUX8);
+    constexpr auto ch_arm1 = static_cast<size_t>(sensor::SbusChannel::AUX9);
+    constexpr auto ch_arm2 = static_cast<size_t>(sensor::SbusChannel::AUX10);
 
     uint16_t prev_ch_values[16] = {};
     std::ranges::fill(prev_ch_values, 1500);
@@ -235,28 +225,21 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         }
 
         const uint16_t throttle_value = sbus_data.channels[ch_throttle];
-        const bool is_armed = controller->esc_driver_.is_armed();
+        // const bool is_armed = controller->esc_driver_.is_armed();
+        const bool is_armed = false;
 
-        if (!is_armed) {
-            // Pet the 🐕 (safety feature)
-            if (throttle_value > 1010) {
-                esp_err_t err = esp_task_wdt_reset();
-                if (err != ESP_OK) {
-                    ESP_LOGE(TAG, "Failed to reset task watchdog! Error: %d", err);
-                }
-                vTaskDelayUntil(&last_wake_time, controller->config_.task_period);
-                continue;
-            }
-
-            ESP_LOGI(TAG, "Arming ESCs");
-            controller->esc_driver_.arm_all();
-            // Continuing to next loop to ensure arming is complete before sending throttle
-            // probably unnecessary, but I like it
-            vTaskDelayUntil(&last_wake_time, controller->config_.task_period);
-            continue;
+        if (sbus_data.channels[ch_ki] > 1900) {
+            controller->esc_driver_.arm1_all();
+            vTaskDelay(pdMS_TO_TICKS(350));
+        }
+        if (sbus_data.channels[ch_ki] > 1900) {
+            controller->esc_driver_.arm1_all();
+            vTaskDelay(pdMS_TO_TICKS(350));
         }
 
-        controller->updateThrottle(throttle_value);
+        if (sbus_data.channels[arm_switch] > 1900) {
+            controller->updateThrottle(throttle_value);
+        }
 
         vTaskDelayUntil(&last_wake_time, controller->config_.task_period);
     }

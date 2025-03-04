@@ -82,27 +82,25 @@ public:
     esp_err_t set_command(MotorPosition position, DshotCommand command, bool telemetry = false);
     esp_err_t set_all_commands(DshotCommand command, bool telemetry = false);
 
+    esp_err_t arm1_all();
+    esp_err_t arm2_all();
 
-    bool is_initialized() const { return initialized_; }
-    // bool is_started() const { return started_; }
-    bool is_armed() const { return armed_; }
-    esp_err_t arm_all();
-    
     private:
     struct MotorControl {
         rmt_channel_handle_t channel = nullptr;
         rmt_encoder_handle_t encoder = nullptr;
         uint16_t current_throttle = 0;
     };
-    
+
     static constexpr const char* TAG = "ESC Driver";
-    
+
     Config config_;
     std::map<MotorPosition, MotorControl> motors_;
     bool initialized_ = false;
     // bool started_ = false;
     bool armed_ = false;
-    
-    esp_err_t create_rmt_channel(gpio_num_t gpio_num, rmt_channel_handle_t* channel);
-    esp_err_t create_encoder(rmt_encoder_handle_t* encoder);
+
+    esp_err_t arm_all();
+    esp_err_t create_rmt_channel(gpio_num_t gpio_num, rmt_channel_handle_t* channel) const;
+    esp_err_t create_encoder(rmt_encoder_handle_t* encoder) const;
 };
