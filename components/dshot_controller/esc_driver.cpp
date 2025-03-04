@@ -48,7 +48,7 @@ esp_err_t EscDriver::init(const Config& config) {
     return ESP_OK;
 }
 
-esp_err_t EscDriver::create_rmt_channel(gpio_num_t gpio_num, rmt_channel_handle_t* channel) {
+esp_err_t EscDriver::create_rmt_channel(gpio_num_t gpio_num, rmt_channel_handle_t* channel) const {
     rmt_tx_channel_config_t tx_config = {
         .gpio_num = gpio_num,
         .clk_src = RMT_CLK_SRC_DEFAULT,
@@ -66,7 +66,7 @@ esp_err_t EscDriver::create_rmt_channel(gpio_num_t gpio_num, rmt_channel_handle_
     return rmt_new_tx_channel(&tx_config, channel);
 }
 
-esp_err_t EscDriver::create_encoder(rmt_encoder_handle_t* encoder) {
+esp_err_t EscDriver::create_encoder(rmt_encoder_handle_t* encoder) const {
     dshot_esc_encoder_config_t encoder_config = {
         .resolution = config_.resolution_hz,
         .baud_rate = config_.baud_rate,
@@ -115,15 +115,86 @@ esp_err_t EscDriver::arm_all() {
 
     vTaskDelay(pdMS_TO_TICKS(350));
 
-    armed_ = true;
+    // armed_ = true;
     ESP_LOGI(TAG, "All motors armed");
 
     return ESP_OK;
 }
 
+esp_err_t EscDriver::arm1_all() {
+
+    for (auto& [position, motor] : motors_) {
+        ESP_LOGI(TAG, "Arming: %d", static_cast<uint16_t>(position));
+        dshot_esc_throttle_t frame = {
+            .throttle = 0,
+            .telemetry_req = false
+        };
+
+        rmt_transmit_config_t  transmit_config = {
+            .loop_count = -1,
+            .flags = {
+                .eot_level = 0,
+                .queue_nonblocking = false
+            }
+        };
+
+        ESP_RETURN_ON_ERROR(rmt_disable(motor.channel), TAG, "Failed to disable channel");
+        ESP_RETURN_ON_ERROR(rmt_enable(motor.channel), TAG, "Failed to re-enable channel");
+
+        ESP_RETURN_ON_ERROR(
+            rmt_transmit(motor.channel, motor.encoder, &frame, sizeof(frame), &transmit_config),
+            TAG, "Failed to send arm signal to motor position %d", static_cast<int>(position)
+        );
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(350));
+
+    // armed_ = true;
+    ESP_LOGI(TAG, "All motors armed");
+
+    return ESP_OK;
+}
+
+
+esp_err_t EscDriver::arm2_all() {
+
+    for (auto& [position, motor] : motors_) {
+        ESP_LOGI(TAG, "Arming: %d", static_cast<uint16_t>(position));
+        // set_command(position, EscDriver::DshotCommand::MOTOR_STOP, false);
+        dshot_esc_throttle_t frame = {
+            .throttle = 48,
+            .telemetry_req = false
+        };
+
+        rmt_transmit_config_t  transmit_config = {
+            .loop_count = -1,
+            .flags = {
+                .eot_level = 0,
+                .queue_nonblocking = false
+            }
+        };
+
+        ESP_RETURN_ON_ERROR(rmt_disable(motor.channel), TAG, "Failed to disable channel");
+        ESP_RETURN_ON_ERROR(rmt_enable(motor.channel), TAG, "Failed to re-enable channel");
+
+        ESP_RETURN_ON_ERROR(
+            rmt_transmit(motor.channel, motor.encoder, &frame, sizeof(frame), &transmit_config),
+            TAG, "Failed to send arm signal to motor position %d", static_cast<int>(position)
+        );
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(350));
+
+    // armed_ = true;
+    ESP_LOGI(TAG, "All motors armed");
+
+    return ESP_OK;
+}
+
+
 esp_err_t EscDriver::set_throttle(MotorPosition position, uint16_t input_throttle, bool telemetry) {
     ESP_RETURN_ON_FALSE(initialized_, ESP_ERR_INVALID_STATE, TAG, "Driver not initialized or started");
-    ESP_RETURN_ON_FALSE(armed_, ESP_ERR_INVALID_STATE, TAG, "Motors not armed");
+    // ESP_RETURN_ON_FALSE(armed_, ESP_ERR_INVALID_STATE, TAG, "Motors not armed");
     ESP_RETURN_ON_FALSE(input_throttle >= 1000 && input_throttle <= 2000, ESP_ERR_INVALID_ARG, 
         TAG, "Input throttle %hu outside valid range (1000-2000)", input_throttle);
     
