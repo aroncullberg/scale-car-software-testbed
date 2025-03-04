@@ -2,8 +2,14 @@
 
 # Disclamer: This repo is mostly for us to have a log of what we have done, as such there will not be any help with reproducing the project.
 
-![Video](resources/20250221_111848.mp4)
-![Video](resources/20250227_154445.mp4)
+
+https://github.com/user-attachments/assets/9d515676-ec9a-4bec-ab3a-135b9c511faa
+
+
+
+https://github.com/user-attachments/assets/2ce086a1-ba34-4368-8fec-eeab37d5dc80
+
+
 
 <p align="center">
   <img src="resources/image.png" width="45%" />
