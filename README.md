@@ -2,6 +2,7 @@
 
 # Disclamer: This repo is mostly for us to have a log of what we have done, as such there will not be any help with reproducing the project.
 
+![Video](resources/20250221_111848.mp4)
 ![Video](resources/20250227_154445.mp4)
 
 <p align="center">
@@ -21,11 +22,13 @@
 ## Overview
 An advanced electric vehicle platform featuring torque vectoring, high-speed capabilities (200+ km/h), and comprehensive sensor integration (some features still under development). Built using the ESP-IDF v5.4 toolchain with C++, this project combines sophisticated hardware control with real-time telemetry and sensor fusion.
 
+[//]: # ()
+[//]: # (## Background)
 
-## Background
-Back in early 2024, we stumbled upon a YouTube video series from [@IndeterminateDesign](https://www.youtube.com/playlist?list=PLtkERGXE-7yYSD-6eVEBmZx3pTgSMK7Pk) showcasing their hypercar RC project. Like many ambitious projects, it started with that naive thought of "hey, we can do that but better!" Now, a year later(as of February 2025), after working on-and-off around school commitments, our RC car is just about ready to move under its own power.
+[//]: # (Back in early 2024, we stumbled upon a YouTube video series from [@IndeterminateDesign]&#40;https://www.youtube.com/playlist?list=PLtkERGXE-7yYSD-6eVEBmZx3pTgSMK7Pk&#41; showcasing their hypercar RC project. Like many ambitious projects, it started with that naive thought of "hey, we can do that but better!" Now, a year later&#40;as of February 2025&#41;, after working on-and-off around school commitments, our RC car is just about ready to move under its own power.)
 
-Our approach focused on using cost-effective electronics and sensors and that when it would inevidbly come back to bite us we would be able to solve it "*in software*".
+[//]: # ()
+[//]: # (Our approach focused on using cost-effective electronics and sensors and that when it would inevidbly come back to bite us we would be able to solve it "*in software*".)
 
 [//]: # (## Getting Started)
 
