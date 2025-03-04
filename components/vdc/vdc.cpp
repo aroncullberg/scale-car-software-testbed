@@ -1,7 +1,7 @@
 #include "vdc.h"
 
 #include <sys/stat.h>
-#include <inttypes.h>
+#include <cinttypes>
 
 #include "esp_log.h"
 #include "esp_check.h"
