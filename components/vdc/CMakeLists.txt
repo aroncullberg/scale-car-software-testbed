@@ -8,6 +8,7 @@ idf_component_register(
         "freertos"
         "esp_common"
         "servo"
+        "ConfigManager"
         "shared"
         "data_pool"
         "dshot_controller"

@@ -9,8 +9,21 @@
 
 VehicleDynamicsController::VehicleDynamicsController(const Config& config)
     : config_(config),
-      steering_servo_(config.steering_servo),
-      esc_driver_() {}
+      steering_servo_(config.steering_servo) {
+    headingPid_.integral = ConfigManager::instance().getFloat("pid/integral", headingPid_.integral);
+    headingPid_.kP = ConfigManager::instance().getFloat("pid/kp", headingPid_.kP);
+    headingPid_.kI = ConfigManager::instance().getFloat("pid/ki", headingPid_.kI);
+    headingPid_.kD = ConfigManager::instance().getFloat("pid/kd", headingPid_.kD);
+    coefficents_.headingChangeRateCoefficent =
+        ConfigManager::instance().getFloat("pid/turnrate", coefficents_.headingChangeRateCoefficent);
+    gyroConfig_.strength =
+        ConfigManager::instance().getFloat("pid/gyro_str", gyroConfig_.strength);
+    gyroConfig_.resetTimeoutMs =
+        ConfigManager::instance().getInt("pid/gyro_timeout", gyroConfig_.resetTimeoutMs);
+
+    callback_ = [this] { this->updateFromConfig(); };
+    ConfigManager::instance().registerCallback(callback_);
+}
 
 VehicleDynamicsController::~VehicleDynamicsController() {
     stop();
@@ -64,6 +77,22 @@ esp_err_t VehicleDynamicsController::stop() {
     return ESP_OK;
 }
 
+void VehicleDynamicsController::updateFromConfig() {
+    ESP_LOGI(TAG, "Updating vdc configuration from ConfigManager");
+
+    gyroConfig_.strength =
+        ConfigManager::instance().getFloat("pid/gyro_str", gyroConfig_.strength);
+    gyroConfig_.resetTimeoutMs =
+        ConfigManager::instance().getInt("pid/gyro_timeout", gyroConfig_.resetTimeoutMs);
+    coefficents_.headingChangeRateCoefficent =
+        ConfigManager::instance().getFloat("pid/turnrate", coefficents_.headingChangeRateCoefficent);
+    headingPid_.kP = ConfigManager::instance().getFloat("pid/kp", headingPid_.kP);
+    headingPid_.kI = ConfigManager::instance().getFloat("pid/ki", headingPid_.kI);
+    headingPid_.kD = ConfigManager::instance().getFloat("pid/kd", headingPid_.kD);
+    headingPid_.integral = ConfigManager::instance().getFloat("pid/integral", headingPid_.integral);
+}
+
+
 namespace {
     float mapChannelToRange(uint16_t channel_value, float min_val, float max_val) {
         if (channel_value < 1000) channel_value = 1000;
@@ -113,9 +142,9 @@ void VehicleDynamicsController::controllerTask(void* arg) {
             // if (xTaskGetTickCount() % 99 == 0) {
             //     ESP_LOGW(TAG, "Invalid sbus signal");
             // }
-            controller->esc_driver_.set_all_throttles(0);
+            controller->esc_driver_.set_all_throttles(1000);
             controller->steering_servo_.setPosition(1500);
-            vTaskDelay(pdMS_TO_TICKS(10)); // Short delay to prevent CPU hogging
+            vTaskDelay(pdMS_TO_TICKS(1000)); // Short delay to prevent CPU hogging
         }
 
         if (sbus_data.channels[toggle_pidloop] < 1600) {
