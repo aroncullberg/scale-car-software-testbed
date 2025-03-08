@@ -82,5 +82,5 @@ private:
 
     bool pid_enabled_{true};
     bool is_running_{false};
-    bool arm_switch_enabled_{false};
+    bool armed_{false};
 };

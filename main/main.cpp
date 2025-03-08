@@ -9,6 +9,7 @@
 #include "esc_driver.h"
 #include "vdc.h"
 #include "log_monitor.h"
+#include "config_manager.h"
 
 #ifndef TAG
 #define TAG "main"
@@ -31,6 +32,20 @@
 
 
 extern "C" [[noreturn]] void app_main(void) {
+    ESP_LOGI("main", "Initializing ConfigManager");
+    esp_err_t ret = ConfigManager::instance().init();
+    if (ret != ESP_OK) {
+        ESP_LOGE("main", "Failed to initialize ConfigManager: %d", ret);
+    } else {
+        ESP_LOGI("main", "ConfigManager initialized successfully");
+
+        // Test direct access to a key
+        bool imu_enabled = ConfigManager::instance().getBool("imu/enabled", true);
+        ESP_LOGI("main", "Direct access to imu/enabled: %d", imu_enabled);
+    }
+
+
+
     LogMonitor::Config log_config;
     log_config.ap_ssid = "ESP32-Monitor";
     log_config.ap_password = "password";
@@ -42,32 +57,32 @@ extern "C" [[noreturn]] void app_main(void) {
     ESP_LOGI("main", "Log monitor started! Connect to WiFi SSID: %s", log_config.ap_ssid);
     ESP_LOGI("main", "Use 'nc YOUR_ESP_IP 8888' to view logs");
 
-    // #if CONFIG_SBUS_ENABLE
-    //     sensor::SBUS::Config sbus_config = {
-    //         .uart_num = static_cast<uart_port_t>(CONFIG_SBUS_UART_NUM),        
-    //         .uart_tx_pin = GPIO_NUM_17,    
-    //         .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_SBUS_UART_RX),    
-    //         .baud_rate = 100000            // SBUS runs at 100k baud
-    //     };
-    //     static sensor::SBUS sbus(sbus_config);
-    //     ESP_ERROR_CHECK(sbus.init());
-    //     ESP_ERROR_CHECK(sbus.start());
-    // #endif
+    #if CONFIG_SBUS_ENABLE
+        sensor::SBUS::Config sbus_config = {
+            .uart_num = static_cast<uart_port_t>(CONFIG_SBUS_UART_NUM),
+            .uart_tx_pin = GPIO_NUM_17,
+            .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_SBUS_UART_RX),
+            .baud_rate = 100000            // SBUS runs at 100k baud
+        };
+        static sensor::SBUS sbus(sbus_config);
+        ESP_ERROR_CHECK(sbus.init());
+        ESP_ERROR_CHECK(sbus.start());
+    #endif
 
 
-    // #if CONFIG_GPS_ENABLE
-    //     sensor::GPS::Config gps_config = {
-    //         .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
-    //         .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
-    //         .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
-    //         .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
-    //         .rx_buffer_size = 2048,
-    //         .tx_buffer_size = 1024,
-    //     };
-    //     static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
-    //     ESP_ERROR_CHECK(gps.init());
-    //     ESP_ERROR_CHECK(gps.start());
-    // #endif
+    #if CONFIG_GPS_ENABLE
+        sensor::GPS::Config gps_config = {
+            .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
+            .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
+            .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
+            .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
+            .rx_buffer_size = 2048,
+            .tx_buffer_size = 1024,
+        };
+        static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
+        ESP_ERROR_CHECK(gps.init());
+        ESP_ERROR_CHECK(gps.start());
+    #endif
 
 
     // #if CONFIG_IMU_ENABLE
@@ -82,7 +97,7 @@ extern "C" [[noreturn]] void app_main(void) {
     //     ESP_ERROR_CHECK(imu.init());
     //     ESP_ERROR_CHECK(imu.start());
     // #endif
-    
+    //
     // Configure the steering servo
     Servo::Config servo_config = {
         .gpio_num = static_cast<gpio_num_t>(CONFIG_SERVO_OUTPUT_GPIO),  
@@ -106,13 +121,12 @@ extern "C" [[noreturn]] void app_main(void) {
         .task_period = pdMS_TO_TICKS(20)
     };
 
-
     static VehicleDynamicsController vd_controller(vd_config);
     ESP_ERROR_CHECK(vd_controller.init());
     ESP_ERROR_CHECK(vd_controller.start());
 
     while(true) {
-        ESP_LOGI("app_main", "Main loop running...");
+        // ESP_LOGI("app_main", "Main loop running...");
         vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }

@@ -22,7 +22,7 @@ public:
         const char* ap_password{"password"};
         uint16_t tcp_port{8888};
 
-        uint32_t server_task_stack_size{4096};
+        uint32_t server_task_stack_size{8192};
         uint8_t server_task_priority{5};
 
         size_t log_queue_size{50};
@@ -35,6 +35,7 @@ public:
     esp_err_t stop();
 
     void queueLogMessage(const char* message);
+    void processCommand(const char* command_line, int client_socket);
 
 private:
     LogMonitor() = default;
@@ -43,6 +44,13 @@ private:
     // Delete copy constructor and assignment operator
     LogMonitor(const LogMonitor&) = delete;
     LogMonitor& operator=(const LogMonitor&) = delete;
+
+    void handleGetCommand(const char* module, const char* setting, int client_socket);
+    void handleSetCommand(const char* module, const char* setting, const char* value, int client_socket);
+    void handleHelpCommand(int client_socket);
+    void handleListCommand(const char* module, int client_socket);
+
+    void sendResponse(const char* response, int client_socket);
 
     static void serverTask(void* args);
     esp_err_t setupWiFi();

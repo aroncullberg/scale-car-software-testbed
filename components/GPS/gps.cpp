@@ -101,6 +101,21 @@ esp_err_t GPS::start() {
         1
     );
 
+    // BaseType_t task_created1 = xTaskCreatePinnedToCore(
+    //     reportingTask,            // task function
+    //     "gps_report",             // task name
+    //     4096,                     // stack size (smaller than main GPS task)
+    //     this,                     // parameter
+    //     3,                        // lower priority than main GPS task
+    //     &reporting_task_handle_,  // task handle
+    //     1                         // core
+    // );
+
+    // if (task_created1 != pdPASS) {
+    //     ESP_LOGE(TAG, "Failed to create GPS task");
+    //     return ESP_ERR_NO_MEM;
+    // }
+
     if (task_created != pdPASS) {
         ESP_LOGE(TAG, "Failed to create GPS task");
         return ESP_ERR_NO_MEM;
@@ -121,10 +136,48 @@ esp_err_t GPS::stop() {
         task_handle_ = nullptr;
     }
 
+    if (reporting_task_handle_ != nullptr) {
+        vTaskDelete(reporting_task_handle_);
+        reporting_task_handle_ = nullptr;
+    }
+
+
     is_running = false;
     ESP_LOGI(TAG, "GPS stopped");
     return ESP_OK;
 }
+
+void GPS::reportingTask(void* parameters) {
+    const auto gps = static_cast<GPS*>(parameters);
+    TickType_t last_wake_time = xTaskGetTickCount();
+
+    ESP_LOGI(TAG, "GPS reporting task started");
+
+    while (true) {
+        // Get current data from the data pool
+        sensor::GpsData current_data = VehicleData::instance().getGPS();
+
+        // Get max speed with mutex protection
+        uint32_t max_speed = 0;
+        max_speed = gps->max_speed_mmps_;
+
+        // Convert speeds from mm/s to km/h for display
+        float current_speed_kmh = current_data.speed_mmps / 1000.0f * 3.6f;
+        float max_speed_kmh = max_speed / 1000.0f * 3.6f;
+
+        // Report the data
+        ESP_LOGI(TAG, "=== GPS STATUS REPORT ===");
+        ESP_LOGI(TAG, "Satellites: %u", current_data.quality.satellites);
+        ESP_LOGI(TAG, "Current Speed: %.2f km/h", current_speed_kmh);
+        ESP_LOGI(TAG, "Maximum Speed: %.2f km/h", max_speed_kmh);
+        ESP_LOGI(TAG, "Fix Type: %u", current_data.quality.fix_type);
+        ESP_LOGI(TAG, "========================");
+
+        // Run at 1Hz
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(1000));
+    }
+}
+
 
 void GPS::gpsTask(void* parameters) {
     const auto gps = static_cast<GPS*>(parameters);
@@ -149,7 +202,7 @@ void GPS::gpsTask(void* parameters) {
                                            0);  // No waiting
             
             if (read_length > 0) {
-                // ESP_LOGI(TAG, "%s", data);
+                ESP_LOGI(TAG, "%s", data);
                 // Feed data to TinyGPS++
                 for (int i = 0; i < read_length; i++) {
                     gps->tiny_gps_.encode(data[i]);
@@ -202,12 +255,16 @@ void GPS::processGPSData() {
         data.time.seconds = tiny_gps_.time.second();
         data.time.milliseconds = tiny_gps_.time.centisecond() * 10;
 
-        ESP_LOGI(TAG, "-----------------------------------");
-        ESP_LOGI(TAG, "latitude: %" PRIu32, data.latitude);
-        ESP_LOGI(TAG, "longitude: %" PRIu32, data.longitude);
-        ESP_LOGI(TAG, "fix: %" PRIu8, data.quality.fix_type);
-        ESP_LOGI(TAG, "satellites: %" PRIu8, data.quality.satellites);
-        ESP_LOGI(TAG, "-----------------------------------");
+        // ESP_LOGI(TAG, "-----------------------------------");
+        // ESP_LOGI(TAG, "latitude: %" PRIu32, data.latitude);
+        // ESP_LOGI(TAG, "longitude: %" PRIu32, data.longitude);
+        // ESP_LOGI(TAG, "fix: %" PRIu8, data.quality.fix_type);
+        // ESP_LOGI(TAG, "satellites: %" PRIu8, data.quality.satellites);
+        // ESP_LOGI(TAG, "-----------------------------------");
+
+        if (data.speed_valid && data.speed_mmps > 0) {
+            max_speed_mmps_ = std::max(max_speed_mmps_, data.speed_mmps);
+        }
 
         // Update vehicle data pool
         VehicleData::instance().updateGPS(data);

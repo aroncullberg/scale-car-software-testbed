@@ -4,6 +4,7 @@ idf_component_register(
         INCLUDE_DIRS
             "."
         REQUIRES
+            "ConfigManager"
             freertos
             esp_common
             esp_wifi

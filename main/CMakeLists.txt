@@ -14,6 +14,7 @@ idf_component_register(
         "vdc"
         "log_monitor"
         "servo"
+        "ConfigManager"
 #        "nvs_flash"
 )
 
