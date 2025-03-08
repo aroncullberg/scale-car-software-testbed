@@ -85,24 +85,24 @@ extern "C" [[noreturn]] void app_main(void) {
     #endif
 
 
-    // #if CONFIG_IMU_ENABLE
-    //     sensor::IMU::Config imu_config = {
-    //         .spi_host = SPI2_HOST,
-    //         .spi_miso_pin = CONFIG_IMU_SPI_MISO,
-    //         .spi_mosi_pin = CONFIG_IMU_SPI_MOSI,
-    //         .spi_sck_pin = CONFIG_IMU_SPI_CLK,
-    //         .spi_cs_pin = CONFIG_IMU_SPI_CS,
-    //     };
-    //     static sensor::IMU imu(imu_config);
-    //     ESP_ERROR_CHECK(imu.init());
-    //     ESP_ERROR_CHECK(imu.start());
-    // #endif
+    #if CONFIG_IMU_ENABLE
+        sensor::IMU::Config imu_config = {
+            .spi_host = SPI2_HOST,
+            .spi_miso_pin = CONFIG_IMU_SPI_MISO,
+            .spi_mosi_pin = CONFIG_IMU_SPI_MOSI,
+            .spi_sck_pin = CONFIG_IMU_SPI_CLK,
+            .spi_cs_pin = CONFIG_IMU_SPI_CS,
+        };
+        static sensor::IMU imu(imu_config);
+        ESP_ERROR_CHECK(imu.init());
+        ESP_ERROR_CHECK(imu.start());
+    #endif
     //
     // Configure the steering servo
     Servo::Config servo_config = {
         .gpio_num = static_cast<gpio_num_t>(CONFIG_SERVO_OUTPUT_GPIO),  
-        .min_pulse_width_us = static_cast<int>(CONFIG_SERVO_MIN_PULSE_WIDTH_US),  
-        .max_pulse_width_us = static_cast<int>(CONFIG_SERVO_MAX_PULSE_WIDTH_US),  
+        .min_pulse_width_us = (CONFIG_SERVO_MIN_PULSE_WIDTH_US),
+        .max_pulse_width_us = (CONFIG_SERVO_MAX_PULSE_WIDTH_US),
         .freq_hz = static_cast<uint32_t>(CONFIG_SERVO_FREQUENCY_HZ)  
     };
 
