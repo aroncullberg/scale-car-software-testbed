@@ -7,6 +7,7 @@
 #include "data_pool.h"
 #include "esc_driver.h"
 #include "quaternion.h"
+#include "config_manager.h"
 #include <memory>
 
 class VehicleDynamicsController {
@@ -30,6 +31,9 @@ public:
     // Delete copy constructor and assignment operator
     VehicleDynamicsController(const VehicleDynamicsController&) = delete;
     VehicleDynamicsController& operator=(const VehicleDynamicsController&) = delete;
+
+    void updateFromConfig();
+    ConfigManager::ConfigChangeCallback callback_;
 
     esp_err_t init();
     esp_err_t start();
