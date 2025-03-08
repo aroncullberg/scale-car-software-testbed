@@ -55,7 +55,7 @@ esp_err_t IMU::configureSPI() {
 }
 
 esp_err_t IMU::configureIMU() {
-    constexpr int MAX_RETRIES = 3;
+    constexpr int MAX_RETRIES = 30;
     int retry_count = 0;
     
     // ID
@@ -70,9 +70,8 @@ esp_err_t IMU::configureIMU() {
     if (retry_count >= MAX_RETRIES) {
         ESP_LOGE(TAG, "ID check failed after %d attempts", MAX_RETRIES);
         return ESP_ERR_NOT_FOUND;
-    } else {
-        ESP_LOGI(TAG, "ICM20948 check id passed");
     }
+    ESP_LOGI(TAG, "ICM20948 check id passed");
 
     // WHOAMI
     icm20948_status_e status = ICM_20948_STAT_ERR;
