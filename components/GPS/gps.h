@@ -40,11 +40,17 @@ private:
     esp_err_t configureUART();
 
     static void gpsTask(void* parameters);
+    static void reportingTask(void* parameters);
+    TaskHandle_t reporting_task_handle_{nullptr};
     TaskHandle_t task_handle_{nullptr};
+
+    bool reporting_running_{false};
 
     TinyGPSPlus tiny_gps_;
     Config config_t;
     GpsData current_data{}; // TODO: rename to current_data_
+    uint32_t max_speed_mmps_{0}; // Maximum speed in mm/s
+
 
     bool is_running{false};
 };

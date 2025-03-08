@@ -2,7 +2,17 @@
 #include "servo.h"
 #include <algorithm>
 
+// TODO: figure out what should be in constuctor(?) and what should be in init
 Servo::Servo(const Config& config) : config_(config) {
+    // TODO: Clamp this value to a resnoable range
+    min_pulse_width_us_ = ConfigManager::instance().getInt("servo/min_steer", min_pulse_width_us_);
+    max_pulse_width_us_ = ConfigManager::instance().getInt("servo/max_steer", max_pulse_width_us_);
+    // center_pulse_width_us_ = ConfigManager::instance().getInt("servo/center", center_pulse_width_us_);
+    invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
+
+    callback_ = [this] { this->updateFromConfig(); };
+    ConfigManager::instance().registerCallback(callback_);
+
     init();
 }
 
@@ -19,6 +29,7 @@ Servo::~Servo() {
     if (timer_) {
         mcpwm_del_timer(timer_);
     }
+    ConfigManager::instance().unregisterCallback(&callback_);
 }
 
 esp_err_t Servo::init() {
@@ -111,32 +122,44 @@ esp_err_t Servo::init() {
     return ESP_OK;
 }
 
-// uint32_t Servo::calculateCompareValue(uint16_t position) const {
-//     position = std::max(uint16_t(1000), std::min(uint16_t(2000), position));
-    
-//     return 3000 - position;
-// }
+void Servo::updateFromConfig() {
+    ESP_LOGI(TAG, "Updating Servo configuration from ConfigManager");
 
-uint32_t Servo::calculateCompareValue(uint16_t position) {
-    // Clamp the position to the valid range
-    // TODO: make this error and return instead
-    position = std::max(static_cast<uint16_t>(CONFIG_SERVO_MIN_PULSE_WIDTH_US),
-                       std::min(static_cast<uint16_t>(CONFIG_SERVO_MAX_PULSE_WIDTH_US), position));
-
-    const uint32_t scaled = CONFIG_SERVO_MIN_PULSE_WIDTH_US +
-                     (position - CONFIG_SERVO_MIN_PULSE_WIDTH_US) *
-                     (CONFIG_SERVO_MAX_PULSE_WIDTH_US - CONFIG_SERVO_MIN_PULSE_WIDTH_US) /
-                     (CONFIG_SERVO_MAX_PULSE_WIDTH_US - CONFIG_SERVO_MIN_PULSE_WIDTH_US);
-
-    // Apply offset
-    return CONFIG_SERVO_MIN_PULSE_WIDTH_US + CONFIG_SERVO_MAX_PULSE_WIDTH_US -
-           (scaled + CONFIG_SERVO_OFFSET);
+    min_pulse_width_us_ = ConfigManager::instance().getInt("servo/min_steer", min_pulse_width_us_);
+    max_pulse_width_us_ = ConfigManager::instance().getInt("servo/max_steer", max_pulse_width_us_);
+    // center_pulse_width_us_ = ConfigManager::instance().getInt("servo/center", center_pulse_width_us_);
+    invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
 }
 
 
-esp_err_t Servo::setPosition(const uint16_t position) const {
-    // ESP_LOGI(TAG, "%d -> %d", position,  static_cast<int>(calculateCompareValue(position)));
-    // return ESP_OK;
 
+uint32_t Servo::calculateCompareValue(uint16_t position) {
+    position = std::clamp(position,
+                         static_cast<uint16_t>(min_pulse_width_us_),
+                         static_cast<uint16_t>(max_pulse_width_us_));
+
+    uint32_t pulse_width;
+
+    // TODO: Make more readable
+    if (position < center_pulse_width_us_) {
+        float ratio = static_cast<float>(position - min_pulse_width_us_) /
+                     (center_pulse_width_us_ - min_pulse_width_us_);
+        pulse_width = min_pulse_width_us_ +
+                     ratio * (center_pulse_width_us_ - min_pulse_width_us_);
+    } else {
+        float ratio = static_cast<float>(position - center_pulse_width_us_) /
+                     (max_pulse_width_us_ - center_pulse_width_us_);
+        pulse_width = center_pulse_width_us_ +
+                     ratio * (max_pulse_width_us_ - center_pulse_width_us_);
+    }
+
+    if (invert_steering_) {
+        pulse_width = min_pulse_width_us_ + max_pulse_width_us_ - pulse_width;
+    }
+
+    return pulse_width;
+}
+
+esp_err_t Servo::setPosition(const uint16_t position) {
     return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
 }
