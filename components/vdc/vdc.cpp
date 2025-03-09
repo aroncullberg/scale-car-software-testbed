@@ -44,7 +44,7 @@ esp_err_t VehicleDynamicsController::start() {
         return ESP_OK;
     }
 
-    const BaseType_t ret = xTaskCreatePinnedToCore(
+    BaseType_t ret = xTaskCreatePinnedToCore(
         controllerTask,
         "veh_dynamics",
         config_.task_stack_size,
@@ -80,16 +80,51 @@ esp_err_t VehicleDynamicsController::stop() {
 void VehicleDynamicsController::updateFromConfig() {
     ESP_LOGI(TAG, "Updating vdc configuration from ConfigManager");
 
-    gyroConfig_.strength =
+    float new_strength =
         ConfigManager::instance().getFloat("pid/gyro_str", gyroConfig_.strength);
-    gyroConfig_.resetTimeoutMs =
+    if (new_strength != gyroConfig_.strength) {
+        ESP_LOGI(TAG, "Gyro strength changed: %.2f -> %.2f",
+                gyroConfig_.strength, new_strength);
+        gyroConfig_.strength = new_strength;
+    }
+    int new_resetTimeoutMs =
         ConfigManager::instance().getInt("pid/gyro_timeout", gyroConfig_.resetTimeoutMs);
-    coefficents_.headingChangeRateCoefficent =
+    if (new_resetTimeoutMs != gyroConfig_.resetTimeoutMs) {
+        ESP_LOGI(TAG, "Gyro reset timeout changed: %ld -> %d",
+                gyroConfig_.resetTimeoutMs, new_resetTimeoutMs);
+        gyroConfig_.resetTimeoutMs = new_resetTimeoutMs;
+    }
+    float new_headingChangeRateCoefficent =
         ConfigManager::instance().getFloat("pid/turnrate", coefficents_.headingChangeRateCoefficent);
-    headingPid_.kP = ConfigManager::instance().getFloat("pid/kp", headingPid_.kP);
-    headingPid_.kI = ConfigManager::instance().getFloat("pid/ki", headingPid_.kI);
-    headingPid_.kD = ConfigManager::instance().getFloat("pid/kd", headingPid_.kD);
-    headingPid_.integral = ConfigManager::instance().getFloat("pid/integral", headingPid_.integral);
+    if (new_headingChangeRateCoefficent != coefficents_.headingChangeRateCoefficent) {
+        ESP_LOGI(TAG, "Heading change rate changed: %.2f -> %.2f",
+                coefficents_.headingChangeRateCoefficent, new_headingChangeRateCoefficent);
+        coefficents_.headingChangeRateCoefficent = new_headingChangeRateCoefficent;
+    }
+    float new_kP = ConfigManager::instance().getFloat("pid/kp", headingPid_.kP);
+    if (new_kP != headingPid_.kP) {
+        ESP_LOGI(TAG, "PID kP changed: %.2f -> %.2f",
+                headingPid_.kP, new_kP);
+        headingPid_.kP = new_kP;
+    }
+    float new_kI = ConfigManager::instance().getFloat("pid/ki", headingPid_.kI);
+    if (new_kI != headingPid_.kI) {
+        ESP_LOGI(TAG, "PID kI changed: %.2f -> %.2f",
+                headingPid_.kI, new_kI);
+        headingPid_.kI = new_kI;
+    }
+    float new_kD = ConfigManager::instance().getFloat("pid/kd", headingPid_.kD);
+    if (new_kD != headingPid_.kD) {
+        ESP_LOGI(TAG, "PID kD changed: %.2f -> %.2f",
+                headingPid_.kD, new_kD);
+        headingPid_.kD = new_kD;
+    }
+    float new_integral = ConfigManager::instance().getFloat("pid/integral", headingPid_.integral);
+    if (new_integral != headingPid_.integral) {
+        ESP_LOGI(TAG, "PID integral changed: %.2f -> %.2f",
+                headingPid_.integral, new_integral);
+        headingPid_.integral = new_integral;
+    }
 }
 
 
@@ -126,6 +161,8 @@ void VehicleDynamicsController::controllerTask(void* arg) {
 
     constexpr auto ch_throttle = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
     constexpr auto ch_steering = static_cast<size_t>(sensor::SbusChannel::STEERING);
+    constexpr auto ch_turnrate = static_cast<size_t>(sensor::SbusChannel::AUX1);
+    constexpr auto ch_gyro_strength = static_cast<size_t>(sensor::SbusChannel::AUX2);
     constexpr auto toggle_pidloop = static_cast<size_t>(sensor::SbusChannel::AUX7);
     constexpr auto arm_switch = static_cast<size_t>(sensor::SbusChannel::AUX8);
     constexpr auto ch_arm1 = static_cast<size_t>(sensor::SbusChannel::AUX9);
@@ -139,15 +176,40 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         const sensor::ImuData& imu_data = vehicle_data.getImu();
 
         if (!sbus_data.quality.valid_signal) {
-            // if (xTaskGetTickCount() % 99 == 0) {
-            //     ESP_LOGW(TAG, "Invalid sbus signal");
-            // }
+            ESP_LOGW(TAG, "Invalid sbus signal");
             controller->esc_driver_.set_all_throttles(1000);
             controller->steering_servo_.setPosition(1500);
             vTaskDelay(pdMS_TO_TICKS(1000)); // Short delay to prevent CPU hogging
         }
 
-        if (sbus_data.channels[toggle_pidloop] < 1600) {
+        uint16_t turnrate_ch = sbus_data.channels[ch_turnrate];
+        float new_turnrate = mapChannelToRange(turnrate_ch, 1.0f, 10.0f);
+        if (fabsf(new_turnrate - controller->coefficents_.headingChangeRateCoefficent) > 0.1f) {
+            ESP_LOGI(TAG, "Turn rate changed: %.2f -> %.2f (ch: %u)",
+                    controller->coefficents_.headingChangeRateCoefficent,
+                    new_turnrate, turnrate_ch);
+            controller->coefficents_.headingChangeRateCoefficent = new_turnrate;
+        }
+
+        // Gyro strength (0.0-1.0 range)
+        uint16_t gyro_ch = sbus_data.channels[ch_gyro_strength];
+        float new_gyro_strength = mapChannelToRange(gyro_ch, 0.0f, 1.0f);
+        if (fabsf(new_gyro_strength - controller->gyroConfig_.strength) > 0.02f) {
+            ESP_LOGI(TAG, "Gyro strength changed: %.2f -> %.2f (ch: %u)",
+                    controller->gyroConfig_.strength,
+                    new_gyro_strength, gyro_ch);
+            controller->gyroConfig_.strength = new_gyro_strength;
+        }
+
+        if (sbus_data.channels[toggle_pidloop] > 1900 && !controller->use_pidloop_) {
+            ESP_LOGI(TAG, "PID loop enabled");
+            controller->use_pidloop_ = true;
+        } else if (sbus_data.channels[toggle_pidloop] < 1900 && controller->use_pidloop_) {
+            ESP_LOGI(TAG, "PID loop disabled");
+            controller->use_pidloop_ = false;
+        }
+        // if (sbus_data.channels[toggle_pidloop] < 1600) {
+        if (!controller->use_pidloop_) {
             controller->updateSteering(sbus_data.channels[ch_steering]);
         } else {
             controller->updateGyroAssistance(deltaTime, sbus_data, imu_data);

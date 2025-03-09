@@ -414,9 +414,9 @@ void IMU::imuTask(void* parameters) {
             // Process 6-axis quaternion first (primary orientaiton source)
             // Process calibrated gyroscope data
             if (dmp_data.header & DMP_header_bitmap_Quat6) {
-                instance->current_data_.quat6_x = dmp_data.Quat6.Data.Q1;
+                instance->current_data_.quat6_x = -dmp_data.Quat6.Data.Q1;
                 instance->current_data_.quat6_y = dmp_data.Quat6.Data.Q2;
-                instance->current_data_.quat6_z = dmp_data.Quat6.Data.Q3;
+                instance->current_data_.quat6_z = -dmp_data.Quat6.Data.Q3;
                 data_updated = true;
                 #if CONFIG_IMU_LOG_QUAT6
                     // Convert to quaternion units (Q30 format, so divide by 2^30)
@@ -425,13 +425,13 @@ void IMU::imuTask(void* parameters) {
                         static_cast<double>(instance->current_data_.quat6_y) / 1073741824.0,
                         static_cast<double>(instance->current_data_.quat6_z) / 1073741824.0);
                 #endif
-            } 
+            }
 
             // Process 9-axis quaternion for drift correction
             if (dmp_data.header & DMP_header_bitmap_Quat9) {
-                instance->current_data_.quat9_x = dmp_data.Quat9.Data.Q1;
+                instance->current_data_.quat9_x = -dmp_data.Quat9.Data.Q1;
                 instance->current_data_.quat9_y = dmp_data.Quat9.Data.Q2;
-                instance->current_data_.quat9_z = dmp_data.Quat9.Data.Q3;
+                instance->current_data_.quat9_z = -dmp_data.Quat9.Data.Q3;
                 instance->current_data_.quat9_accuracy = dmp_data.Quat9.Data.Accuracy;
                 data_updated = true;
                 #if CONFIG_IMU_LOG_QUAT9

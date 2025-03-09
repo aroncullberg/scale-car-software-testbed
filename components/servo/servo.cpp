@@ -9,6 +9,7 @@ Servo::Servo(const Config& config) : config_(config) {
     max_pulse_width_us_ = ConfigManager::instance().getInt("servo/max_steer", max_pulse_width_us_);
     // center_pulse_width_us_ = ConfigManager::instance().getInt("servo/center", center_pulse_width_us_);
     invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
+    offset_ = ConfigManager::instance().getInt("servo/offset", offset_);
 
     callback_ = [this] { this->updateFromConfig(); };
     ConfigManager::instance().registerCallback(callback_);
@@ -125,10 +126,32 @@ esp_err_t Servo::init() {
 void Servo::updateFromConfig() {
     ESP_LOGI(TAG, "Updating Servo configuration from ConfigManager");
 
-    min_pulse_width_us_ = ConfigManager::instance().getInt("servo/min_steer", min_pulse_width_us_);
-    max_pulse_width_us_ = ConfigManager::instance().getInt("servo/max_steer", max_pulse_width_us_);
+    int new_min_pulse_width_us_ = ConfigManager::instance().getInt("servo/min_steer", min_pulse_width_us_);
+    if (new_min_pulse_width_us_ != min_pulse_width_us_) {
+        ESP_LOGI(TAG, "Min pulse width changed: %d -> %d",
+                 min_pulse_width_us_, new_min_pulse_width_us_);
+        min_pulse_width_us_ = new_min_pulse_width_us_;
+    }
+    int new_max_pulse_width_us_ = ConfigManager::instance().getInt("servo/max_steer", max_pulse_width_us_);
+    if (new_max_pulse_width_us_ != max_pulse_width_us_) {
+        ESP_LOGI(TAG, "Max pulse width changed: %d -> %d",
+                 max_pulse_width_us_, new_max_pulse_width_us_);
+        max_pulse_width_us_ = new_max_pulse_width_us_;
+    }
     // center_pulse_width_us_ = ConfigManager::instance().getInt("servo/center", center_pulse_width_us_);
-    invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
+
+    bool new_invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
+    if (new_invert_steering_ != invert_steering_) {
+        ESP_LOGI(TAG, "Invert steering changed: %d -> %d",
+                 invert_steering_, new_invert_steering_);
+        invert_steering_ = new_invert_steering_;
+    }
+    int new_offset_ = ConfigManager::instance().getInt("servo/offset", offset_);
+    if (new_offset_ != offset_) {
+        ESP_LOGI(TAG, "Offset changed: %d -> %d",
+                 offset_, new_offset_);
+        offset_ = new_offset_;
+    }
 }
 
 
@@ -152,6 +175,10 @@ uint32_t Servo::calculateCompareValue(uint16_t position) {
         pulse_width = center_pulse_width_us_ +
                      ratio * (max_pulse_width_us_ - center_pulse_width_us_);
     }
+
+    pulse_width = std::clamp(pulse_width + offset_,
+                             static_cast<uint32_t>(min_pulse_width_us_),
+                             static_cast<uint32_t>(max_pulse_width_us_));
 
     if (invert_steering_) {
         pulse_width = min_pulse_width_us_ + max_pulse_width_us_ - pulse_width;
