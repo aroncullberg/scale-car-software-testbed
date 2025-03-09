@@ -41,6 +41,7 @@ private:
     int min_pulse_width_us_{500};  // Minimum pulse width in microseconds
     int max_pulse_width_us_{2500};  // Maximum pulse width in microseconds
     int center_pulse_width_us_{1500};  // Maximum pulse width in microseconds
+    int offset_{0};
     bool invert_steering_{true};
 
     static constexpr uint32_t TIMEBASE_RESOLUTION_HZ = 1000000;  // 1MHz, 1us per tick

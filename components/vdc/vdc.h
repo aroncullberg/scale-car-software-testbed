@@ -87,4 +87,5 @@ private:
     bool pid_enabled_{true};
     bool is_running_{false};
     bool armed_{false};
+    bool use_pidloop_{false};
 };
