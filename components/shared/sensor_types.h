@@ -93,22 +93,20 @@ struct GpsData {
 
 struct ImuData {
     // Using GMP_4 which means the values are ... )TODO=
-    int16_t accel_x{0};  // 1 unit = 1/80?? g
-    int16_t accel_y{0};  // 1 unit = 1/80?? g
-    int16_t accel_z{0};  // 1 unit = 1/80?? g
-    
-    int16_t gyro_x{0};   // 1 unit = 1/64 dps
-    int16_t gyro_y{0};   // 1 unit = 1/64 dps
-    int16_t gyro_z{0};   // 1 unit = 1/64 dps
+    int16_t accel_x{0};  // 1 unit = 1/80?? g // (positive) X is forwards movement
+    int16_t accel_y{0};  // 1 unit = 1/80?? g // (positive) Y is right movement
+    int16_t accel_z{0};  // 1 unit = 1/80?? g // (positive) Z is downwards movement (down because of NED coordinate system)
 
-    int16_t gyro_cal_x{0};   // 1 unit = 1/64 dps
-    int16_t gyro_cal_y{0};   // 1 unit = 1/64 dps
-    int16_t gyro_cal_z{0};   // 1 unit = 1/64 dps
-    
+
+    // right hand rule, thumb points in direction of positive axis fingers in direction of rotation
+    int16_t gyro_x{0};   // 1 unit = 1/64 dps // (positive) X is roll right
+    int16_t gyro_y{0};   // 1 unit = 1/64 dps // (positive) Y is front side up rear down, pitch up
+    int16_t gyro_z{0};   // 1 unit = 1/64 dps // (positive) Z is yaw right (clockwise when looking from above)
+
     // Quaternion orientation (Q30 format)
-    int32_t  quat9_x{0};  // i component
-    int32_t  quat9_y{0};  // j component
-    int32_t  quat9_z{0};  // k component
+    int32_t  quat9_x{0};  // i component // (positive) X is roll right
+    int32_t  quat9_y{0};  // j component // (positive) Y is pitch up
+    int32_t  quat9_z{0};  // k component // (positive) Z is yaw right (clockwise when looking from above)
     uint16_t quat9_accuracy{0}; // DMP accuracy indicator
 
     // game roation vector (for smooth rotations)
