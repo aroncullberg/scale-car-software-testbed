@@ -365,13 +365,13 @@ void IMU::imuTask(void* parameters) {
             // Look, contrary to the name i think this is gravity compensated accel data since we turned on that before
             if (dmp_data.header & DMP_header_bitmap_Accel) {
                 instance->current_data_.accel_x = dmp_data.Raw_Accel.Data.X;
-                instance->current_data_.accel_y = dmp_data.Raw_Accel.Data.Y;
+                instance->current_data_.accel_y = -dmp_data.Raw_Accel.Data.Y;
                 instance->current_data_.accel_z = dmp_data.Raw_Accel.Data.Z;
                 data_updated = true;
 
                 #if CONFIG_IMU_LOG_ACCEL
                 // Convert to m/s (1 unit = 1/2048 g)[m/s^2]
-                ESP_LOGI(TAG, "Accel: x=%.3f g, y=%.3f g, z=%.3f g",
+                ESP_LOGI(TAG, "Accel: x=%4.3f g, y=%4.3f g, z=%4.3f g",
                     (static_cast<double>(instance->current_data_.accel_x) / 8192.0f),
                     (static_cast<double>(instance->current_data_.accel_y) / 8192.0f),
                     (static_cast<double>(instance->current_data_.accel_z) / 8192.0f));
@@ -383,6 +383,8 @@ void IMU::imuTask(void* parameters) {
                 instance->current_data_.gyro_y = dmp_data.Raw_Gyro.Data.Y - dmp_data.Raw_Gyro.Data.BiasY;
                 instance->current_data_.gyro_z = dmp_data.Raw_Gyro.Data.Z - dmp_data.Raw_Gyro.Data.BiasZ;
                 data_updated = true;
+
+                // TODO: Replace this with a keystore value such that you can say log accel data for x seconds and then it turns off.
                 #if CONFIG_IMU_LOG_GYRO
                     ESP_LOGI(TAG, "Gyro: x=%.3f dps, y=%.3f dps, z=%.3f dps",
                         static_cast<double>(instance->current_data_.gyro_x) / 65.5f,
@@ -398,40 +400,24 @@ void IMU::imuTask(void* parameters) {
                 #endif
             } 
 
-            // if (dmp_data.header & DMP_header_bitmap_Gyro_Calibr) {
-            //     instance->current_data_.gyro_cal_x = dmp_data.Gyro_Calibr.Data.X;
-            //     instance->current_data_.gyro_cal_y = dmp_data.Gyro_Calibr.Data.Y;
-            //     instance->current_data_.gyro_cal_z = dmp_data.Gyro_Calibr.Data.Z;
-            //     data_updated = true;
-            //     #if CONFIG_IMU_LOG_CALIBGYRO
-            //         ESP_LOGI(TAG, "GyroCalib: x=%.3f dps, y=%.3f dps, z=%.3f dps",
-            //             static_cast<double>(instance->current_data_.gyro_cal_x) / 64.0,
-            //             static_cast<double>(instance->current_data_.gyro_cal_y) / 64.0,
-            //             static_cast<double>(instance->current_data_.gyro_cal_z) / 64.0);
-            //     #endif
-            // } 
-
-            // Process 6-axis quaternion first (primary orientaiton source)
-            // Process calibrated gyroscope data
             if (dmp_data.header & DMP_header_bitmap_Quat6) {
-                instance->current_data_.quat6_x = -dmp_data.Quat6.Data.Q1;
-                instance->current_data_.quat6_y = dmp_data.Quat6.Data.Q2;
-                instance->current_data_.quat6_z = -dmp_data.Quat6.Data.Q3;
+                instance->current_data_.quat6_x = dmp_data.Quat6.Data.Q1;
+                instance->current_data_.quat6_y = -dmp_data.Quat6.Data.Q2;
+                instance->current_data_.quat6_z = dmp_data.Quat6.Data.Q3;
                 data_updated = true;
                 #if CONFIG_IMU_LOG_QUAT6
                     // Convert to quaternion units (Q30 format, so divide by 2^30)
-                    ESP_LOGI(TAG, "Quat6: x=%.6f, y=%.6f, z=%.6f",
+                    ESP_LOGI(TAG, "Quat6: x=%3.6f, y=%3.6f, z=%3.6f",
                         static_cast<double>(instance->current_data_.quat6_x) / 1073741824.0,
                         static_cast<double>(instance->current_data_.quat6_y) / 1073741824.0,
                         static_cast<double>(instance->current_data_.quat6_z) / 1073741824.0);
                 #endif
             }
 
-            // Process 9-axis quaternion for drift correction
             if (dmp_data.header & DMP_header_bitmap_Quat9) {
-                instance->current_data_.quat9_x = -dmp_data.Quat9.Data.Q1;
+                instance->current_data_.quat9_x = dmp_data.Quat9.Data.Q1;
                 instance->current_data_.quat9_y = dmp_data.Quat9.Data.Q2;
-                instance->current_data_.quat9_z = -dmp_data.Quat9.Data.Q3;
+                instance->current_data_.quat9_z = dmp_data.Quat9.Data.Q3;
                 instance->current_data_.quat9_accuracy = dmp_data.Quat9.Data.Accuracy;
                 data_updated = true;
                 #if CONFIG_IMU_LOG_QUAT9

@@ -82,8 +82,8 @@ public:
     esp_err_t set_command(MotorPosition position, DshotCommand command, bool telemetry = false);
     esp_err_t set_all_commands(DshotCommand command, bool telemetry = false);
 
-    esp_err_t arm1_all();
-    esp_err_t arm2_all();
+    esp_err_t debug(int cmd, int delay, int repeat);
+    esp_err_t failsafe();
 
     private:
     struct MotorControl {
