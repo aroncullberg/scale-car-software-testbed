@@ -8,18 +8,20 @@
 #include "esc_driver.h"
 #include "quaternion.h"
 #include "config_manager.h"
+#include "steering_pid.h"
+
 #include <memory>
+#include <functional>
 
 class VehicleDynamicsController {
 public:
     struct Config {
-        // Servo configuration
         Servo::Config steering_servo;
 
-        // ESC driver configuration
         EscDriver::Config esc_config;
 
-        // Task configuration
+        SteeringPID::Config pid_config;
+
         uint32_t task_stack_size{4096};
         uint8_t task_priority{5};
         TickType_t task_period{pdMS_TO_TICKS(20)}; // 50Hz default
@@ -28,64 +30,38 @@ public:
     explicit VehicleDynamicsController(const Config& config);
     ~VehicleDynamicsController();
 
-    // Delete copy constructor and assignment operator
     VehicleDynamicsController(const VehicleDynamicsController&) = delete;
     VehicleDynamicsController& operator=(const VehicleDynamicsController&) = delete;
-
-    void updateFromConfig();
-    ConfigManager::ConfigChangeCallback callback_;
 
     esp_err_t init();
     esp_err_t start();
     esp_err_t stop();
 
+    void enablePID(bool enable);
+
+    void updateFromConfig();
+
 private:
-    static constexpr const char* TAG = "VehicleDynamics";
+    static constexpr auto TAG = "VehicleDynamics";
 
     static void controllerTask(void* arg);
-    esp_err_t updateSteering(uint16_t steering_value);
-    esp_err_t updateThrottle(uint16_t throttle_value);
-
-    Quaternion referenceOrientation_;
-    float targetHeading_{0.0f};
-    uint32_t lastThrottleActiveTime_{0};
-
-    struct {
-        float kP{2.0f};                      // Proportional gain
-        float kI{0.05f};                     // Integral gain
-        float kD{0.1f};                      // Derivative gain
-
-        float integral{0.0f};                // Integral accumulator
-        float previousError{0.0f};           // Previous error for derivative
-    } headingPid_;
-
-    struct {
-        float headingChangeRateCoefficent{4.5f};
-    } coefficents_;
-
-    // Gyro assistance settings
-    struct {
-        bool enabled{true};                  // Enable/disable gyro assistance
-        float strength{0.65f};                // Gyro effect strength (0.0-1.0)
-        uint32_t resetTimeoutMs{800};        // Time after throttle cut to reset reference
-    } gyroConfig_;
-
-    static Quaternion getCurrentOrientation(const sensor::ImuData& imu_data);
-    float calculateHeadingError(const sensor::ImuData& imu_data) const;
-    float computePID(float error, float deltaTime);
-    void updateReferenceOrientation(const sensor::SbusData& sbus_data,
-                                                         const sensor::ImuData& imu_data);
-    void updateGyroAssistance(float deltaTime, const sensor::SbusData& sbus_data,
-                                                         const sensor::ImuData& imu_data);
+    esp_err_t updateSteering(sensor::channel_t steering_value);
+    esp_err_t updateThrottle(sensor::channel_t throttle_value);
 
 
     Config config_;
     Servo steering_servo_;
     EscDriver esc_driver_;
+    SteeringPID steering_pid_;
     TaskHandle_t task_handle_{nullptr};
 
-    bool pid_enabled_{true};
+    bool use_pidloop_{false};
     bool is_running_{false};
     bool armed_{false};
-    bool use_pidloop_{false};
+
+    int test_value_{21};
+    int test_delay_{500};
+    int test_repeat_{12};
+
+    std::function<void()> callback_;
 };
