@@ -46,15 +46,7 @@ public:
 
     ~SteeringPID();
 
-    /**
-     * @brief Update PID controller with latest sensor data
-     *
-     * @param sbus_data SBUS data with steering input
-     * @param imu_data IMU data with orientation and gyro data
-     * @param deltaTime Time since last update in seconds
-     * @return float Steering output (-1.0 to 1.0)
-     */
-    float update(const sensor::SbusData& sbus_data,
+    sensor::channel_t update(const sensor::SbusData& sbus_data,
                  const sensor::ImuData& imu_data,
                  float deltaTime);
 

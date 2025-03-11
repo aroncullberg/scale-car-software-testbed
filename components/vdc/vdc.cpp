@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #include <cinttypes>
 
+#include "sensor_types.h"
 #include "esp_log.h"
 #include "esp_check.h"
 #include "esp_task_wdt.h"
@@ -133,27 +134,26 @@ void VehicleDynamicsController::controllerTask(void* arg) {
 
         if (!sbus_data.quality.valid_signal) {
             ESP_LOGW(TAG, "Invalid SBUS signal");
-            controller->esc_driver_.set_all_throttles(1000);
-            // controller->esc_driver_.failsafe();
-            controller->steering_servo_.setPosition(1500);
+            controller->steering_servo_.setPosition(sensor::Servo::FAILSAFE_POSITION);
+            controller->esc_driver_.set_all_throttles(sensor::Motor::FAILSAFE_THROTTLE); // TODO: Change this to be a realfailsafe where the rmt driver shuts off so esc just shuts down (i hope they do atelast)
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         }
 
-        if (sbus_data.channels[toggle_pidloop] > 1900 && !controller->use_pidloop_) {
+        if (sbus_data.channels_scaled[toggle_pidloop] > 1900 && !controller->use_pidloop_) {
             controller->enablePID(true);
-        } else if (sbus_data.channels[toggle_pidloop] < 1900 && controller->use_pidloop_) {
+        } else if (sbus_data.channels_scaled[toggle_pidloop] < 1900 && controller->use_pidloop_) {
             controller->enablePID(false);
         }
 
         if (!controller->use_pidloop_) {                            // Direct control mode
-            controller->updateSteering(sbus_data.channels[ch_steering]);
+            controller->updateSteering(sbus_data.channels_scaled[ch_steering]);
         } else {                                                    // PID assisted control mode
-            float steering_output = controller->steering_pid_.update(sbus_data, imu_data, deltaTime);
-            // controller->updateSteering(steering_output);
-        }
+            const sensor::channel_t steering_output = controller->steering_pid_.update(sbus_data, imu_data, deltaTime);
+            controller->updateSteering(steering_output);
+         }
 
-        if (sbus_data.channels[ch_debug] > 1900) {
+        if (sbus_data.channels_scaled[ch_debug] > 1900) {
             controller->esc_driver_.debug(
                 controller->test_value_,
                 controller->test_delay_,
@@ -163,29 +163,33 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         }
 
 
-        if (sbus_data.channels[arm_switch] > 1900 && !controller->armed_) {
+        if (sbus_data.channels_scaled[arm_switch] > 1900 && !controller->armed_) {
             controller->armed_ = true;
             ESP_LOGI(TAG, "Motors armed");
-        } else if (sbus_data.channels[arm_switch] < 1900 && controller->armed_) {
+        } else if (sbus_data.channels_scaled[arm_switch] < 1900 && controller->armed_) {
             controller->armed_ = false;
             // controller->esc_driver_.failsafe(); // TODO: failsafe just disables the rmt channel and there isnt a way to re-enable it when running so that needs to be rewritten
             ESP_LOGI(TAG, "Motors disarmed");
-            controller->esc_driver_.set_all_throttles(1000);
+            controller->esc_driver_.set_all_throttles(sensor::Motor::FAILSAFE_THROTTLE);
         }
 
         if (controller->armed_) {
-            controller->updateThrottle(sbus_data.channels[ch_throttle]);
+            controller->updateThrottle(sbus_data.channels_scaled[ch_throttle]);
         }
 
         vTaskDelayUntil(&last_wake_time, controller->config_.task_period);
     }
 }
 
-esp_err_t VehicleDynamicsController::updateThrottle(uint16_t throttle_value) {
+esp_err_t VehicleDynamicsController::updateThrottle(sensor::channel_t throttle_value) {
+    ESP_LOGI(TAG, "Throttle value: %d", throttle_value);
+    return ESP_OK;
     return esc_driver_.set_all_throttles(throttle_value);
 }
 
-esp_err_t VehicleDynamicsController::updateSteering(uint16_t steering_value) {
+esp_err_t VehicleDynamicsController::updateSteering(sensor::channel_t steering_value) {
+    ESP_LOGI(TAG, "Steering value: %d", steering_value);
+    return ESP_OK;
     return steering_servo_.setPosition(steering_value);
 }
 

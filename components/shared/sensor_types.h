@@ -1,6 +1,8 @@
 #pragma once
 
 #include <map>
+#include <algorithm>
+#include <array>
 
 namespace sensor {
 
@@ -41,8 +43,38 @@ enum class SbusChannel : uint8_t {
     CHANNEL_COUNT = 16
 };
 
+    using channel_t = uint16_t;
+
+constexpr uint16_t RAW_MIN = 192;
+constexpr uint16_t RAW_MAX = 1792;
+constexpr uint16_t RAW_RANGE = RAW_MAX - RAW_MIN;
+constexpr channel_t SCALED_MIN = 0;
+constexpr channel_t SCALED_MAX = 2000;
+
+constexpr std::array<channel_t, RAW_RANGE + 1> createScaleLookupTable() {
+    std::array<uint16_t, RAW_RANGE + 1> table{};
+
+    for (uint16_t i = 0; i <= RAW_RANGE; ++i) {
+        // (i * SCALED_MAX + RAW_RANGE/2) / RAW_RANGE
+        table[i] = static_cast<uint16_t>((static_cast<uint32_t>(i) * SCALED_MAX + (RAW_RANGE / 2)) / RAW_RANGE);
+    }
+
+    return table;
+}
+
+constexpr auto SBUS_SCALE_TABLE = createScaleLookupTable();
+
+constexpr channel_t rawToScaled(const uint16_t raw_value) {
+    const uint16_t index = std::clamp(raw_value, RAW_MIN, RAW_MAX) - RAW_MIN;
+    return SBUS_SCALE_TABLE[index];
+}
+
+
+
 struct SbusData {
-    uint16_t channels[16]{1500}; // NOTE: range: 1000-2000 (well its scaled to this before being stored)
+    // TODO: Make this use a custon type that is just a wrapper for uint16 so i can force functions to only accept channel value type.
+    uint16_t channels_raw[16]{1500}; // NOTE: range: 1000-2000 (well its scaled to this before being stored)
+    channel_t channels_scaled[16]{1500}; // NOTE: range: 1000-2000 (well its scaled to this before being stored)
     // std::map<uint16_t, SbusChannel> channels;
     struct {
         uint8_t frame_loss_percent{0};
@@ -91,6 +123,8 @@ struct GpsData {
     GpsData() = default;
 };
 
+
+
 struct ImuData {
     // Using GMP_4 which means the values are ... )TODO=
     int16_t accel_x{0};  // 1 unit = 1/80?? g // (positive) X is forwards movement
@@ -126,6 +160,16 @@ struct ImuData {
     // Default constructor for zero-initialization
     ImuData() = default;
 };
+    struct Servo {
+        static constexpr channel_t FAILSAFE_POSITION = 1500;
+        static constexpr channel_t MIN_POSITION = 1000;
+        static constexpr channel_t MAX_POSITION = 2000;
+        static constexpr channel_t NEUTRAL_POSITION = 1500;
+    };
+
+    struct Motor {
+        static constexpr channel_t FAILSAFE_THROTTLE = 1000;
+    };
 
 
 

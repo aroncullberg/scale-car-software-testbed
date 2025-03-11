@@ -36,20 +36,19 @@ void SteeringPID::updateConfig(const Config& config) {
     }
 }
 
-float SteeringPID::update(const sensor::SbusData& sbus_data,
+sensor::channel_t SteeringPID::update(const sensor::SbusData& sbus_data,
                           const sensor::ImuData& imu_data,
                           float deltaTime) {
     if (state_ == ControllerState::DISABLED) {
-        return 0.0f;
+        // Return the raw steering input without any processing
+        return sbus_data.channels_scaled[static_cast<size_t>(sensor::SbusChannel::STEERING)];
     }
 
     checkStateTransitions(sbus_data, imu_data);
 
     // Skip processing if in non-active states
     if (state_ != ControllerState::ACTIVE) {
-        // Just pass through direct control during non-active states
-        float steeringInput = static_cast<float>(sbus_data.channels[static_cast<size_t>(sensor::SbusChannel::STEERING)] - 1500) / 500.0f;
-        return steeringInput;
+        return sbus_data.channels_scaled[static_cast<size_t>(sensor::SbusChannel::STEERING)];
     }
 
     // Update reference orientation if needed
@@ -57,7 +56,7 @@ float SteeringPID::update(const sensor::SbusData& sbus_data,
 
     // Get current orientation and steering input
     Quaternion currentOrientation = getCurrentOrientation(imu_data);
-    float steeringInput = static_cast<float>(sbus_data.channels[static_cast<size_t>(sensor::SbusChannel::STEERING)] - 1500) / 500.0f;
+    float steeringInput = static_cast<float>(sbus_data.channels_scaled[static_cast<size_t>(sensor::SbusChannel::STEERING)] - 1000) / 1000.0f * 2.0f - 1.0f; // Convert 0-2000 to -1.0 to 1.0
 
     // Update target heading based on steering input
     updateTargetHeading(steeringInput, deltaTime);
@@ -81,25 +80,28 @@ float SteeringPID::update(const sensor::SbusData& sbus_data,
     float directFactor = 1.0f - config_.gyroInfluence;
     float gyroFactor = config_.gyroInfluence;
     float finalSteering = steeringInput * directFactor - correction * gyroFactor;
+    // Clamp to valid range
+    if (finalSteering > 1.0f) finalSteering = 1.0f;
+    if (finalSteering < -1.0f) finalSteering = -1.0f;
+
+    // If mapping from normalized [-1,1] to channel_t [0,2000]
+    auto finalSteeringValue = static_cast<sensor::channel_t>((finalSteering + 1.0f) * 1000.0f);
+    if (finalSteeringValue > 2000) finalSteeringValue = 2000;
+    if (finalSteeringValue < 0) finalSteeringValue = 0; // Add a lower bound check as well
 
     // Debug logging (throttled to avoid flooding)
     static uint32_t lastLogTime = 0;
     uint32_t currentTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
     if (currentTime - lastLogTime > 500) {  // Log every 500ms
-        ESP_LOGD(TAG, "PID: err=%.2f, P=%.2f, I=%.2f, D=%.2f, FF=%.2f, out=%.2f",
-                 headingError, pTerm, iTerm, dTerm, feedForward, finalSteering);
+        ESP_LOGD(TAG, "PID: err=%.2f, P=%.2f, I=%.2f, D=%.2f, FF=%.2f, out=%u",
+                 headingError, pTerm, iTerm, dTerm, feedForward, finalSteeringValue);
         lastLogTime = currentTime;
     }
 
-    // Clamp to valid range
-    if (finalSteering > 1.0f) finalSteering = 1.0f;
-    if (finalSteering < -1.0f) finalSteering = -1.0f;
-
-    // Store values for next iteration
     previousError_ = headingError;
     lastGyroRate_ = gyroRate;
 
-    return finalSteering;
+    return finalSteeringValue;
 }
 
 void SteeringPID::reset() {
@@ -181,7 +183,7 @@ void SteeringPID::updateReferenceOrientation(const sensor::SbusData& sbus_data,
                                             const sensor::ImuData& imu_data) {
     // Check if throttle is active
     constexpr auto THROTTLE_CHANNEL = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
-    const bool throttleActive = sbus_data.channels[THROTTLE_CHANNEL] > 1050;  // Small threshold
+    const bool throttleActive = sbus_data.channels_scaled[THROTTLE_CHANNEL] > 50;  // Small threshold
     const uint32_t currentTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
     if (throttleActive) {
@@ -207,9 +209,7 @@ bool SteeringPID::detectPickup(const sensor::ImuData& imu_data) const {
 
     float accelZ = static_cast<float>(imu_data.accel_z) * ACCEL_SCALE;
 
-    float accelMagnitude = std::abs(accelZ);
-
-    bool isPickedUp = std::fabs(accelMagnitude - 1.0f) > config_.accelThresholdPickup;
+    bool isPickedUp = std::fabs(accelZ - 1.0f) > config_.accelThresholdPickup;
 
     return isPickedUp;
 }
@@ -221,7 +221,7 @@ void SteeringPID::checkStateTransitions(const sensor::SbusData& sbus_data,
     bool isPickedUp = detectPickup(imu_data);
 
     constexpr auto THROTTLE_CHANNEL = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
-    const bool throttleActive = sbus_data.channels[THROTTLE_CHANNEL] > 1010;
+    const bool throttleActive = sbus_data.channels_scaled[THROTTLE_CHANNEL] > 50;
 
     switch (state_) {
         case ControllerState::ACTIVE:
