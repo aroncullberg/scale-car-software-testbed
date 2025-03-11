@@ -170,12 +170,15 @@ esp_err_t EscDriver::set_throttle(MotorPosition position, sensor::channel_t inpu
     const auto it = motors_.find(position);
     ESP_RETURN_ON_FALSE(it != motors_.end(), ESP_ERR_NOT_FOUND, TAG, "Motor position not found");
     
-    // if (xTaskGetTickCount() % 1000 == 0) {
-    //     ESP_LOGI(TAG, "Throttle value before scaling %d", input_throttle);
-    // }
 
     // Scale from o-2000 to 48-2047
-    const uint16_t dshot_throttle = input_throttle + 48;
+    const uint16_t dshot_throttle = std::clamp( input_throttle + 48, 48, 1024);
+
+    // if (xTaskGetTickCount() % 99 == 0) {
+    //     // ESP_LOGI(TAG, "Throttle value before scaling %d", input_throttle);
+    //     ESP_LOGI(TAG, "Throttle value after scaling %d", dshot_throttle);
+    // }
+
 
     // TODO: Evalaute if we should use structured bindings here
     MotorControl& motor = it->second;
@@ -247,7 +250,7 @@ esp_err_t EscDriver::set_all_throttles(sensor::channel_t throttle, bool telemetr
     for(const auto& [position, _] : motors_) {
         ESP_RETURN_ON_ERROR(
             set_throttle(position, throttle, telemetry),
-            TAG, "Failed to set throttle for motor position %d", position
+            TAG, "Failed to set throttle for motor position %d", static_cast<int>(position)
         );
     }
     return ESP_OK;
