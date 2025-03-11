@@ -364,9 +364,9 @@ void IMU::imuTask(void* parameters) {
             
             // Look, contrary to the name i think this is gravity compensated accel data since we turned on that before
             if (dmp_data.header & DMP_header_bitmap_Accel) {
-                instance->current_data_.accel_x = dmp_data.Raw_Accel.Data.X;
+                instance->current_data_.accel_x = -dmp_data.Raw_Accel.Data.X;
                 instance->current_data_.accel_y = -dmp_data.Raw_Accel.Data.Y;
-                instance->current_data_.accel_z = dmp_data.Raw_Accel.Data.Z;
+                instance->current_data_.accel_z = -dmp_data.Raw_Accel.Data.Z;
                 data_updated = true;
 
                 #if CONFIG_IMU_LOG_ACCEL
@@ -402,7 +402,7 @@ void IMU::imuTask(void* parameters) {
 
             if (dmp_data.header & DMP_header_bitmap_Quat6) {
                 instance->current_data_.quat6_x = dmp_data.Quat6.Data.Q1;
-                instance->current_data_.quat6_y = -dmp_data.Quat6.Data.Q2;
+                instance->current_data_.quat6_y = dmp_data.Quat6.Data.Q2;
                 instance->current_data_.quat6_z = dmp_data.Quat6.Data.Q3;
                 data_updated = true;
                 #if CONFIG_IMU_LOG_QUAT6
