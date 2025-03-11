@@ -176,7 +176,7 @@ uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
 }
 
 esp_err_t Servo::setPosition(const sensor::channel_t position)  {
-    ESP_LOGI(TAG, "Setting servo position: %ld", calculateCompareValue(position));
-    return ESP_OK;
-    // return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
+    // ESP_LOGI(TAG, "Setting servo position: %ld", calculateCompareValue(position));
+    // return ESP_OK;
+    return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
 }

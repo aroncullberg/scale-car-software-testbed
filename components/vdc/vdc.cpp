@@ -125,6 +125,7 @@ void VehicleDynamicsController::controllerTask(void* arg) {
     constexpr auto toggle_pidloop = static_cast<size_t>(sensor::SbusChannel::AUX7);
     constexpr auto arm_switch = static_cast<size_t>(sensor::SbusChannel::AUX8);
     constexpr auto ch_debug = static_cast<size_t>(sensor::SbusChannel::AUX9);
+    constexpr auto ch_arm = static_cast<size_t>(sensor::SbusChannel::AUX10);
 
     while(true) {
         const float deltaTime = static_cast<float>(controller->config_.task_period) / 1000.0f;
@@ -151,16 +152,23 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         if (!controller->use_pidloop_) {                            // Direct control mode
             controller->updateSteering(sbus_data.channels_scaled[ch_steering]);
         } else {                                                    // PID assisted control mode
-            const sensor::channel_t steering_output = controller->steering_pid_.update(sbus_data, imu_data, deltaTime);
-            controller->updateSteering(steering_output);
+            // const sensor::channel_t steering_output = controller->steering_pid_.update(sbus_data, imu_data, deltaTime);
+            // controller->updateSteering(steering_output);
          }
 
         if (sbus_data.channels_scaled[ch_debug] > 1900) {
+            ESP_LOGI(TAG, "Debug command received");
             controller->esc_driver_.debug(
                 controller->test_value_,
                 controller->test_delay_,
                 controller->test_repeat_
             );
+            vTaskDelay(pdMS_TO_TICKS(350));
+        }
+
+        if (sbus_data.channels_scaled[ch_arm] > 1900) {
+            ESP_LOGI(TAG, "Arm command received");
+            controller->esc_driver_.arm_all();
             vTaskDelay(pdMS_TO_TICKS(350));
         }
 
@@ -183,8 +191,8 @@ void VehicleDynamicsController::controllerTask(void* arg) {
 }
 
 esp_err_t VehicleDynamicsController::updateThrottle(sensor::channel_t throttle_value) {
-    ESP_LOGI(TAG, "Throttle value: %d", throttle_value);
-    return ESP_OK;
+    // ESP_LOGI(TAG, "Throttle value: %d", throttle_value);
+    // return ESP_OK;
     return esc_driver_.set_all_throttles(throttle_value);
 }
 
