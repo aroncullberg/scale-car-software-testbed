@@ -6,6 +6,7 @@
 #include "driver/rmt_tx.h"
 #include "dshot_esc_encoder.h"
 #include <esp_log.h>
+#include "sensor_types.h"
 
 class EscDriver {
 public:
@@ -68,7 +69,7 @@ public:
         uint32_t baud_rate{300000};         // DSHOT300
         uint32_t post_delay_us{50};         // Post-frame delay
         std::map<MotorPosition, gpio_num_t> motor_pins;
-        size_t mem_block_symbols{48};       // WARNING: If this is >48 then we cannot have 4 ESCs
+        size_t mem_block_symbols{48};       // WARNING: If this is >48 then we cannot have 4 ESCs because of memmory stuff
         Config() = default;
     };
 
@@ -77,13 +78,14 @@ public:
 
     esp_err_t init(const Config& config);
     // esp_err_t start();
-    esp_err_t set_throttle(MotorPosition position, uint16_t throttle, bool telemetry = false);
-    esp_err_t set_all_throttles(uint16_t throttle, bool telemetry = false);
+    esp_err_t set_throttle(MotorPosition position, sensor::channel_t throttle, bool telemetry = false);
+    esp_err_t set_all_throttles(sensor::channel_t throttle, bool telemetry = false);
     esp_err_t set_command(MotorPosition position, DshotCommand command, bool telemetry = false);
     esp_err_t set_all_commands(DshotCommand command, bool telemetry = false);
 
-    esp_err_t arm1_all();
-    esp_err_t arm2_all();
+    esp_err_t debug(int cmd, int delay, int repeat);
+    esp_err_t failsafe();
+    esp_err_t arm_all();
 
     private:
     struct MotorControl {
@@ -100,7 +102,6 @@ public:
     // bool started_ = false;
     bool armed_ = false;
 
-    esp_err_t arm_all();
     esp_err_t create_rmt_channel(gpio_num_t gpio_num, rmt_channel_handle_t* channel) const;
     esp_err_t create_encoder(rmt_encoder_handle_t* encoder) const;
 };

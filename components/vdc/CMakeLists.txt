@@ -1,7 +1,8 @@
 idf_component_register(
     SRCS 
        "vdc.cpp"
-    INCLUDE_DIRS 
+       "steering_pid.cpp"
+    INCLUDE_DIRS
         "."
     REQUIRES         
         "driver"

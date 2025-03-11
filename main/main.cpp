@@ -10,6 +10,7 @@
 #include "vdc.h"
 #include "log_monitor.h"
 #include "config_manager.h"
+#include "steering_pid.h"
 
 #ifndef TAG
 #define TAG "main"
@@ -113,9 +114,12 @@ extern "C" [[noreturn]] void app_main(void) {
     esc_config.motor_pins[EscDriver::MotorPosition::REAR_LEFT] = static_cast<gpio_num_t>(40);
     esc_config.motor_pins[EscDriver::MotorPosition::REAR_RIGHT] = static_cast<gpio_num_t>(41);
 
+    SteeringPID::Config pid_config;
+
     const VehicleDynamicsController::Config vd_config = {
         .steering_servo = servo_config,
         .esc_config = esc_config,
+        .pid_config = pid_config,
         .task_stack_size = 4096,
         .task_priority = 5,
         .task_period = pdMS_TO_TICKS(20)

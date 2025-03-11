@@ -38,7 +38,9 @@ static void make_dshot_frame(dshot_esc_frame_t *frame, uint16_t throttle, bool t
     frame->throttle = throttle;
     frame->telemetry = telemetry;
     uint16_t val = frame->val;
-    uint8_t crc = ((val ^ (val >> 4) ^ (val >> 8)) & 0xF0) >> 4;;
+    uint8_t crc = ((val ^ (val >> 4) ^ (val >> 8)) & 0xF0) >> 4;; // NOTE: this was bad // second note this was good and the next one was bad
+    // uint8_t crc = ((val ^ (val >> 4) ^ (val >> 8)) & 0x0F);
+
     frame->crc = crc;
     val = frame->val;
     // change the endian
