@@ -85,6 +85,7 @@ public:
 
     esp_err_t debug(int cmd, int delay, int repeat);
     esp_err_t failsafe();
+    esp_err_t arm_all();
 
     private:
     struct MotorControl {
@@ -101,7 +102,6 @@ public:
     // bool started_ = false;
     bool armed_ = false;
 
-    esp_err_t arm_all();
     esp_err_t create_rmt_channel(gpio_num_t gpio_num, rmt_channel_handle_t* channel) const;
     esp_err_t create_encoder(rmt_encoder_handle_t* encoder) const;
 };

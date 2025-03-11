@@ -61,7 +61,7 @@ private:
 
     int test_value_{21};
     int test_delay_{500};
-    int test_repeat_{6};
+    int test_repeat_{12};
 
     std::function<void()> callback_;
 };
