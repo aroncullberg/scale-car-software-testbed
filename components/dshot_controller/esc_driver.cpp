@@ -247,7 +247,7 @@ esp_err_t EscDriver::set_all_throttles(sensor::channel_t throttle, bool telemetr
     for(const auto& [position, _] : motors_) {
         ESP_RETURN_ON_ERROR(
             set_throttle(position, throttle, telemetry),
-            TAG, "Failed to set throttle for motor position %d", static_cast<int>(position)
+            TAG, "Failed to set throttle for motor position %d", position
         );
     }
     return ESP_OK;

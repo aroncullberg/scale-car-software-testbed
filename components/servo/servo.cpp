@@ -148,21 +148,35 @@ void Servo::updateFromConfig() {
 
 
 uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
-    const uint32_t normalized_position = static_cast<uint32_t>(position) - 1000;
+    if (position > 2000) {
+        ESP_LOGW(TAG, "Position out of range: %u setting servo to FAILSAFE_POSITION", position);
+        return std::clamp(sensor::Servo::FAILSAFE_POSITION + static_cast<uint32_t>(offset_),
+                          static_cast<uint32_t>(config_.min_pulse_width_us),
+                          static_cast<uint32_t>(config_.max_pulse_width_us));
+    }
 
-    const uint32_t scaled_position = normalized_position * range_ / 100;
+    if (range_ < 0 || range_ > 100) {
+        ESP_LOGW(TAG, "Range out of bounds: %d, setting to default 20%%", range_);
+        range_ = 20;
+    }
 
-    uint32_t pulse_width = std::clamp(center_pulse_width_us_ + offset_ + scaled_position,
-                                      static_cast<uint32_t>(config_.min_pulse_width_us),
-                                      static_cast<uint32_t>(config_.max_pulse_width_us));
+    constexpr int32_t symmetric_offset = (sensor::Servo::MAX_POSITION - sensor::Servo::MIN_POSITION) / 2;
+
+    const int32_t normalized_position = static_cast<int32_t>(position) - symmetric_offset;
+
+    const int32_t scaled_position = normalized_position * range_ / 100;
+
+    uint32_t pulse_width = center_pulse_width_us_ + offset_ + scaled_position;
 
     if (invert_steering_) {
         pulse_width = config_.min_pulse_width_us + config_.max_pulse_width_us - pulse_width;
     }
 
-    return pulse_width;
+    return std::clamp(pulse_width, static_cast<uint32_t>(config_.min_pulse_width_us), static_cast<uint32_t>(config_.max_pulse_width_us));
 }
 
 esp_err_t Servo::setPosition(const sensor::channel_t position)  {
-    return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
+    ESP_LOGI(TAG, "Setting servo position: %ld", calculateCompareValue(position));
+    return ESP_OK;
+    // return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
 }

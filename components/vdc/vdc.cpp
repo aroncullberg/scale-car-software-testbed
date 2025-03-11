@@ -25,7 +25,7 @@ VehicleDynamicsController::~VehicleDynamicsController() {
 }
 
 esp_err_t VehicleDynamicsController::init() {
-    esp_err_t err = steering_servo_.setPosition(1500);
+    esp_err_t err = steering_servo_.setPosition(sensor::Servo::NEUTRAL_POSITION);
     ESP_RETURN_ON_ERROR(err, TAG, "Failed to initialize steering servo");
 
     err = esc_driver_.init(config_.esc_config);
@@ -136,13 +136,15 @@ void VehicleDynamicsController::controllerTask(void* arg) {
             ESP_LOGW(TAG, "Invalid SBUS signal");
             controller->steering_servo_.setPosition(sensor::Servo::FAILSAFE_POSITION);
             controller->esc_driver_.set_all_throttles(sensor::Motor::FAILSAFE_THROTTLE); // TODO: Change this to be a realfailsafe where the rmt driver shuts off so esc just shuts down (i hope they do atelast)
-            vTaskDelay(pdMS_TO_TICKS(100));
+            vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
 
         if (sbus_data.channels_scaled[toggle_pidloop] > 1900 && !controller->use_pidloop_) {
+            ESP_LOGI(TAG, "PID control enabled");
             controller->enablePID(true);
         } else if (sbus_data.channels_scaled[toggle_pidloop] < 1900 && controller->use_pidloop_) {
+            ESP_LOGI(TAG, "PID control disabled");
             controller->enablePID(false);
         }
 
@@ -165,11 +167,10 @@ void VehicleDynamicsController::controllerTask(void* arg) {
 
         if (sbus_data.channels_scaled[arm_switch] > 1900 && !controller->armed_) {
             controller->armed_ = true;
-            ESP_LOGI(TAG, "Motors armed");
+            ESP_LOGI(TAG, "Armed!");
         } else if (sbus_data.channels_scaled[arm_switch] < 1900 && controller->armed_) {
             controller->armed_ = false;
-            // controller->esc_driver_.failsafe(); // TODO: failsafe just disables the rmt channel and there isnt a way to re-enable it when running so that needs to be rewritten
-            ESP_LOGI(TAG, "Motors disarmed");
+            ESP_LOGI(TAG, "Disarmed (or is it?)");
             controller->esc_driver_.set_all_throttles(sensor::Motor::FAILSAFE_THROTTLE);
         }
 
@@ -188,8 +189,6 @@ esp_err_t VehicleDynamicsController::updateThrottle(sensor::channel_t throttle_v
 }
 
 esp_err_t VehicleDynamicsController::updateSteering(sensor::channel_t steering_value) {
-    ESP_LOGI(TAG, "Steering value: %d", steering_value);
-    return ESP_OK;
     return steering_servo_.setPosition(steering_value);
 }
 

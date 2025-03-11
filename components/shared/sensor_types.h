@@ -73,8 +73,8 @@ constexpr channel_t rawToScaled(const uint16_t raw_value) {
 
 struct SbusData {
     // TODO: Make this use a custon type that is just a wrapper for uint16 so i can force functions to only accept channel value type.
-    uint16_t channels_raw[16]{1500}; // NOTE: range: 1000-2000 (well its scaled to this before being stored)
-    channel_t channels_scaled[16]{1500}; // NOTE: range: 1000-2000 (well its scaled to this before being stored)
+    uint16_t channels_raw[16]{1000};
+    channel_t channels_scaled[16]{1000};
     // std::map<uint16_t, SbusChannel> channels;
     struct {
         uint8_t frame_loss_percent{0};
@@ -161,14 +161,14 @@ struct ImuData {
     ImuData() = default;
 };
     struct Servo {
-        static constexpr channel_t FAILSAFE_POSITION = 1500;
-        static constexpr channel_t MIN_POSITION = 1000;
+        static constexpr channel_t FAILSAFE_POSITION = 1000;
+        static constexpr channel_t MIN_POSITION = 0;
         static constexpr channel_t MAX_POSITION = 2000;
-        static constexpr channel_t NEUTRAL_POSITION = 1500;
+        static constexpr channel_t NEUTRAL_POSITION = 1000;
     };
 
     struct Motor {
-        static constexpr channel_t FAILSAFE_THROTTLE = 1000;
+        static constexpr channel_t FAILSAFE_THROTTLE = 0;
     };
 
 
