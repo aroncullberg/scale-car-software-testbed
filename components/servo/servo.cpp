@@ -5,11 +5,10 @@
 // TODO: figure out what should be in constuctor(?) and what should be in init
 Servo::Servo(const Config& config) : config_(config) {
     // TODO: Clamp this value to a resnoable range
-    min_pulse_width_us_ = ConfigManager::instance().getInt("servo/min_steer", min_pulse_width_us_);
-    max_pulse_width_us_ = ConfigManager::instance().getInt("servo/max_steer", max_pulse_width_us_);
-    // center_pulse_width_us_ = ConfigManager::instance().getInt("servo/center", center_pulse_width_us_);
     invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
     offset_ = ConfigManager::instance().getInt("servo/offset", offset_);
+    range_ = ConfigManager::instance().getInt("servo/range", range_);
+
 
     callback_ = [this] { this->updateFromConfig(); };
     ConfigManager::instance().registerCallback(callback_);
@@ -126,20 +125,6 @@ esp_err_t Servo::init() {
 void Servo::updateFromConfig() {
     ESP_LOGI(TAG, "Updating Servo configuration from ConfigManager");
 
-    int new_min_pulse_width_us_ = ConfigManager::instance().getInt("servo/min_steer", min_pulse_width_us_);
-    if (new_min_pulse_width_us_ != min_pulse_width_us_) {
-        ESP_LOGI(TAG, "Min pulse width changed: %d -> %d",
-                 min_pulse_width_us_, new_min_pulse_width_us_);
-        min_pulse_width_us_ = new_min_pulse_width_us_;
-    }
-    int new_max_pulse_width_us_ = ConfigManager::instance().getInt("servo/max_steer", max_pulse_width_us_);
-    if (new_max_pulse_width_us_ != max_pulse_width_us_) {
-        ESP_LOGI(TAG, "Max pulse width changed: %d -> %d",
-                 max_pulse_width_us_, new_max_pulse_width_us_);
-        max_pulse_width_us_ = new_max_pulse_width_us_;
-    }
-    // center_pulse_width_us_ = ConfigManager::instance().getInt("servo/center", center_pulse_width_us_);
-
     bool new_invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
     if (new_invert_steering_ != invert_steering_) {
         ESP_LOGI(TAG, "Invert steering changed: %d -> %d",
@@ -152,41 +137,32 @@ void Servo::updateFromConfig() {
                  offset_, new_offset_);
         offset_ = new_offset_;
     }
+    int new_range = ConfigManager::instance().getInt("servo/range", range_);
+    if (new_range != range_) {
+        ESP_LOGI(TAG, "Range changed: %d -> %d",
+                 range_, new_range);
+        range_ = new_range;
+    }
 }
 
 
 
-uint32_t Servo::calculateCompareValue(uint16_t position) {
-    position = std::clamp(position,
-                         static_cast<uint16_t>(min_pulse_width_us_),
-                         static_cast<uint16_t>(max_pulse_width_us_));
+uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
+    const uint32_t normalized_position = static_cast<uint32_t>(position) - 1000;
 
-    uint32_t pulse_width;
+    const uint32_t scaled_position = normalized_position * range_ / 100;
 
-    // TODO: Make more readable
-    if (position < center_pulse_width_us_) {
-        float ratio = static_cast<float>(position - min_pulse_width_us_) /
-                     (center_pulse_width_us_ - min_pulse_width_us_);
-        pulse_width = min_pulse_width_us_ +
-                     ratio * (center_pulse_width_us_ - min_pulse_width_us_);
-    } else {
-        float ratio = static_cast<float>(position - center_pulse_width_us_) /
-                     (max_pulse_width_us_ - center_pulse_width_us_);
-        pulse_width = center_pulse_width_us_ +
-                     ratio * (max_pulse_width_us_ - center_pulse_width_us_);
-    }
-
-    pulse_width = std::clamp(pulse_width + offset_,
-                             static_cast<uint32_t>(min_pulse_width_us_),
-                             static_cast<uint32_t>(max_pulse_width_us_));
+    uint32_t pulse_width = std::clamp(center_pulse_width_us_ + offset_ + scaled_position,
+                                      static_cast<uint32_t>(config_.min_pulse_width_us),
+                                      static_cast<uint32_t>(config_.max_pulse_width_us));
 
     if (invert_steering_) {
-        pulse_width = min_pulse_width_us_ + max_pulse_width_us_ - pulse_width;
+        pulse_width = config_.min_pulse_width_us + config_.max_pulse_width_us - pulse_width;
     }
 
     return pulse_width;
 }
 
-esp_err_t Servo::setPosition(const uint16_t position) {
+esp_err_t Servo::setPosition(const sensor::channel_t position)  {
     return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
 }

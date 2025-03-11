@@ -17,7 +17,7 @@ SBUS::~SBUS() {
     ESP_LOGI(TAG, "SBUS instance destroyed");
 }
 
-esp_err_t SBUS::init() {
+esp_err_t SBUS::init() const {
     ESP_LOGI(TAG, "initializing SBUS on UART%d (TX:%d, RX:%d)",
                     config_t.uart_num, config_t.uart_tx_pin, config_t.uart_rx_pin);
 
@@ -26,8 +26,8 @@ esp_err_t SBUS::init() {
     return ESP_OK;
 }
 
-esp_err_t SBUS::configureUART() {
-    uart_config_t uart_config = {
+esp_err_t SBUS::configureUART() const {
+    const uart_config_t uart_config = {
         .baud_rate = config_t.baud_rate,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_EVEN,
@@ -39,7 +39,7 @@ esp_err_t SBUS::configureUART() {
     // Configure UART parameters
     esp_err_t err = uart_param_config(config_t.uart_num, &uart_config);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "UART paramter configuration failed");
+        ESP_LOGE(TAG, "UART parameter configuration failed");
         return err;
     }
 
@@ -54,10 +54,8 @@ esp_err_t SBUS::configureUART() {
         return err;
     }
 
-    // Install uart driver
-    // buffersizes need to be power of 2 (?)
-    const int rx_buffer_size  = 512;
-    const int tx_buffer_size = 0;
+    constexpr int rx_buffer_size  = 512;
+    constexpr int tx_buffer_size = 0;
 
     err = uart_driver_install(config_t.uart_num,rx_buffer_size,tx_buffer_size,0,nullptr,0);
     if (err != ESP_OK) {
@@ -65,7 +63,7 @@ esp_err_t SBUS::configureUART() {
         return err;
     }
 
-    // enable singal inversion (sbus inverted yadayada)
+    // enable signal inversion (sbus inverted yadayada)
     err = uart_set_line_inverse(config_t.uart_num, UART_SIGNAL_RXD_INV);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set UART signal inversion");
@@ -87,7 +85,7 @@ esp_err_t SBUS::start() {
         4096,                               // stack
         this,                               // ???
         5,                                  // Task priority 
-        &task_handle_ ,                      // self explanatory 
+        &task_handle_ ,                      // self-explanatory
         1
     );
 
@@ -102,8 +100,8 @@ esp_err_t SBUS::start() {
 }
 
 esp_err_t SBUS::stop() {
-    if (!is_running) {
-        return ESP_OK;
+    if (is_running) {
+        return ESP_ERR_INVALID_STATE;
     }
 
     if (task_handle_ != nullptr) {
@@ -118,8 +116,8 @@ esp_err_t SBUS::stop() {
 
 void SBUS::sbusTask(void* parameters) {
     const auto instance = static_cast<SBUS*>(parameters);
-    const uint8_t start_byte = 0x0F;
-    const uint8_t end_byte = 0x00;
+    constexpr uint8_t start_byte = 0x0F;
+    constexpr uint8_t end_byte = 0x00;
     uint8_t byte;
     TickType_t last_frame_time = xTaskGetTickCount();
 
@@ -152,7 +150,7 @@ void SBUS::sbusTask(void* parameters) {
                 
                 // Update timing
                 TickType_t current_time = xTaskGetTickCount();
-                float interval = (float)(current_time - last_frame_time) * portTICK_PERIOD_MS;
+                float interval = static_cast<float>(current_time - last_frame_time) * portTICK_PERIOD_MS;
                 if (interval > 0) {
                     instance->current_data_.quality.frame_interval_ms = interval;
                 }
@@ -200,7 +198,8 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
             }
         }
 
-        current_data_.channels[ch] = scaleChannelValue(raw_value, ch);
+        current_data_.channels_raw[ch] = raw_value;
+        current_data_.channels_scaled[ch] =  rawToScaled(raw_value);
 
         #if CONFIG_SBUS_DEBUG_LOGGING
             if ((ch == 0 || ch == 1 || ch == 2 || ch == 3 || ch == 4 || ch == 5 || ch == 6 || ch == 7 || ch == 8) && xTaskGetTickCount() % 100 == 0) {
@@ -218,67 +217,22 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
 }
 
 
-uint16_t SBUS::scaleChannelValue(uint16_t raw_value, uint8_t ch) {
-    uint16_t min_raw = CHANNEL_CONFIGS[ch][MIN];
-    uint16_t max_raw = CHANNEL_CONFIGS[ch][MAX];
-
-    if (raw_value < min_raw || raw_value > max_raw * 1.1) {
-        return (ch == 0) ? 1000 : 1500;
-    }
-    
-    return std::max(std::min(1000 + ((raw_value - min_raw) * 1000) / (max_raw - min_raw), 2000), 1000);
-}
-
 void SBUS::monitorSignalQuality() {
-    static constexpr uint32_t FRAME_TIMEOUT_MS = 100; // singal lost after 100ms noshow
     static constexpr float NOMINAL_FRAME_INTERVAL = 14.0f; // SBUS runs at ~70Hz (14ms)
     static constexpr float FRAME_INTERVAL_TOLERANCE = 10.0f; // ±5ms
 
-    // fraem ariving at expected rate
     bool timing_ok = abs(current_data_.quality.frame_interval_ms - NOMINAL_FRAME_INTERVAL) < FRAME_INTERVAL_TOLERANCE;
 
-    // ESP_LOGI(TAG, "bool: %2d | %4f %4f", timing_ok, abs(current_data_.quality.frame_interval_ms - NOMINAL_FRAME_INTERVAL), FRAME_INTERVAL_TOLERANCE);
-
-    /// update valid signal flag
     current_data_.quality.valid_signal = timing_ok;
 
-    // calc loss percentage (rolling iwndow)
-    static constexpr int WINDOW_SIZE = 100; // TODO: evlauate if this should be moved to menuconfig
+    static constexpr int WINDOW_SIZE = 100; // TODO: evaluate if this should be moved to menuconfig
     static int good_frames = 0;
 
     if (timing_ok) good_frames++;
 
     if (good_frames > WINDOW_SIZE) good_frames = WINDOW_SIZE;
 
-    current_data_.quality.frame_loss_percent = (uint8_t)(100-(good_frames * 100 / WINDOW_SIZE));
+    current_data_.quality.frame_loss_percent = static_cast<uint8_t>(100 - (good_frames * 100 / WINDOW_SIZE));
 }
-
-// const char* SBUS::getChannelName(SbusChannel channel) {
-//     static const char* channel_names[] = {
-//         "Throttle",
-//         "Steering",
-//         "AUX1",
-//         "AUX2",
-//         "AUX3",
-//         "AUX4",
-//         "AUX5",
-//         "AUX6",
-//         "AUX7",
-//         "AUX8",
-//         "AUX9",
-//         "AUX10",
-//         "AUX11",
-//         "AUX12",
-//         "AUX13",
-//         "AUX14"
-//     };
-
-//     if (static_cast<uint8_t>(channel) >= static_cast<uint8_t>(SbusChannel::CHANNEL_COUNT)) {
-//         return "Invalid";
-//     }
-
-//     return channel_names[static_cast<uint8_t>(channel)];
-// }
-
 
 }

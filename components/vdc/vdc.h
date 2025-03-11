@@ -45,9 +45,8 @@ private:
     static constexpr auto TAG = "VehicleDynamics";
 
     static void controllerTask(void* arg);
-    esp_err_t updateSteering(uint16_t steering_value);
-    esp_err_t updateSteering(float steering_value);
-    esp_err_t updateThrottle(uint16_t throttle_value);
+    esp_err_t updateSteering(sensor::channel_t steering_value);
+    esp_err_t updateThrottle(sensor::channel_t throttle_value);
 
 
     Config config_;
@@ -60,9 +59,9 @@ private:
     bool is_running_{false};
     bool armed_{false};
 
-    int test_value_{0};
-    int test_delay_{0};
-    int test_repeat_{0};
+    int test_value_{21};
+    int test_delay_{500};
+    int test_repeat_{6};
 
     std::function<void()> callback_;
 };
