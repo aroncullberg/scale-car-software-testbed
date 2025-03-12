@@ -71,19 +71,19 @@ extern "C" [[noreturn]] void app_main(void) {
     #endif
 
 
-    #if CONFIG_GPS_ENABLE
-        sensor::GPS::Config gps_config = {
-            .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
-            .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
-            .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
-            .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
-            .rx_buffer_size = 2048,
-            .tx_buffer_size = 1024,
-        };
-        static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
-        ESP_ERROR_CHECK(gps.init());
-        ESP_ERROR_CHECK(gps.start());
-    #endif
+    // #if CONFIG_GPS_ENABLE
+    //     sensor::GPS::Config gps_config = {
+    //         .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
+    //         .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
+    //         .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
+    //         .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
+    //         .rx_buffer_size = 2048,
+    //         .tx_buffer_size = 1024,
+    //     };
+    //     static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
+    //     ESP_ERROR_CHECK(gps.init());
+    //     ESP_ERROR_CHECK(gps.start());
+    // #endif
 
 
     #if CONFIG_IMU_ENABLE
@@ -102,9 +102,7 @@ extern "C" [[noreturn]] void app_main(void) {
     // Configure the steering servo
     Servo::Config servo_config = {
         .gpio_num = static_cast<gpio_num_t>(CONFIG_SERVO_OUTPUT_GPIO),  
-        .min_pulse_width_us = (CONFIG_SERVO_MIN_PULSE_WIDTH_US),
-        .max_pulse_width_us = (CONFIG_SERVO_MAX_PULSE_WIDTH_US),
-        .freq_hz = static_cast<uint32_t>(CONFIG_SERVO_FREQUENCY_HZ)  
+        .freq_hz = static_cast<uint32_t>(CONFIG_SERVO_FREQUENCY_HZ)
     };
 
     // UPDATE: New ESC driver configuration
@@ -114,15 +112,13 @@ extern "C" [[noreturn]] void app_main(void) {
     esc_config.motor_pins[EscDriver::MotorPosition::REAR_LEFT] = static_cast<gpio_num_t>(40);
     esc_config.motor_pins[EscDriver::MotorPosition::REAR_RIGHT] = static_cast<gpio_num_t>(41);
 
-    SteeringPID::Config pid_config;
 
     const VehicleDynamicsController::Config vd_config = {
         .steering_servo = servo_config,
         .esc_config = esc_config,
-        .pid_config = pid_config,
         .task_stack_size = 4096,
         .task_priority = 5,
-        .task_period = pdMS_TO_TICKS(20)
+        .task_period = pdMS_TO_TICKS(10)
     };
 
     static VehicleDynamicsController vd_controller(vd_config);
