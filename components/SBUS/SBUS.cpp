@@ -230,7 +230,7 @@ void SBUS::monitorSignalQuality() {
 
     current_data_.quality.valid_signal = timing_ok;
 
-    static constexpr int WINDOW_SIZE = 100; // TODO: evaluate if this should be moved to menuconfig
+    static constexpr int WINDOW_SIZE = 5; // TODO: evaluate if this should be moved to menuconfig
     static int good_frames = 0;
 
     if (timing_ok) good_frames++;
