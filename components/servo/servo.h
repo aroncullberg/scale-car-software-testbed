@@ -40,7 +40,7 @@ private:
 
     int center_pulse_width_us_{1500};  // Maximum pulse width in microseconds
     int offset_{0};
-    int range_{40};
+    int range_{45};
     bool invert_steering_{true};
 
     static constexpr uint32_t TIMEBASE_RESOLUTION_HZ = 1000000;  // 1MHz, 1us per tick
