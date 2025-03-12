@@ -172,7 +172,7 @@ esp_err_t EscDriver::set_throttle(MotorPosition position, sensor::channel_t inpu
     
 
     // Scale from o-2000 to 48-2047
-    const uint16_t dshot_throttle = std::clamp( input_throttle + 48, 48, 1024);
+    const uint16_t dshot_throttle = std::clamp( input_throttle + 48, 48, 1500);
 
     // if (xTaskGetTickCount() % 99 == 0) {
     //     // ESP_LOGI(TAG, "Throttle value before scaling %d", input_throttle);

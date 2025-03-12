@@ -167,6 +167,11 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
 
     if (len != FRAME_SIZE) {
         ESP_LOGW(TAG, "invalid frame size %d", len);
+
+        std::ranges::fill(current_data_.channels_scaled, 1000);
+        current_data_.channels_scaled[static_cast<int>(SbusChannel::THROTTLE)] = 0;
+        VehicleData::instance().updateSBUS(current_data_);
+
         current_data_.quality.error_count++;
         return;
     }
@@ -225,7 +230,7 @@ void SBUS::monitorSignalQuality() {
 
     current_data_.quality.valid_signal = timing_ok;
 
-    static constexpr int WINDOW_SIZE = 100; // TODO: evaluate if this should be moved to menuconfig
+    static constexpr int WINDOW_SIZE = 5; // TODO: evaluate if this should be moved to menuconfig
     static int good_frames = 0;
 
     if (timing_ok) good_frames++;
