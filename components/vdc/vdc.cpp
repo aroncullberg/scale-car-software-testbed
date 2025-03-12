@@ -11,13 +11,10 @@
 
 VehicleDynamicsController::VehicleDynamicsController(const Config& config)
     : config_(config),
-      steering_servo_(config.steering_servo),
-      steering_pid_(config.pid_config) {
+      steering_servo_(config.steering_servo) {
 
     callback_ = [this] { this->updateFromConfig(); };
     ConfigManager::instance().registerCallback(callback_);
-
-    steering_pid_.setConfigCallback([this] { this->updateFromConfig(); }); // TODO: find better way to do this
 }
 
 VehicleDynamicsController::~VehicleDynamicsController() {
@@ -72,46 +69,13 @@ esp_err_t VehicleDynamicsController::stop() {
     return ESP_OK;
 }
 
-void VehicleDynamicsController::enablePID(bool enable) {
-    if (enable != use_pidloop_) {
-        use_pidloop_ = enable;
-        ESP_LOGI(TAG, "PID control %s", enable ? "enabled" : "disabled");
-
-        if (enable) {
-            steering_pid_.setState(SteeringPID::ControllerState::ACTIVE);
-        } else {
-            steering_pid_.setState(SteeringPID::ControllerState::DISABLED);
-        }
-    }
-}
-
 // TODO: Fix this abomination of callback hell
 void VehicleDynamicsController::updateFromConfig() {
     ESP_LOGI(TAG, "Updating VDC configuration from ConfigManager");
 
-    SteeringPID::Config pid_config = config_.pid_config;
-
-    pid_config.kP = ConfigManager::instance().getFloat("pid/kp", pid_config.kP);
-    pid_config.kI = ConfigManager::instance().getFloat("pid/ki", pid_config.kI);
-    pid_config.kD = ConfigManager::instance().getFloat("pid/kd", pid_config.kD);
-    pid_config.feedForwardGain = ConfigManager::instance().getFloat("pid/ff", pid_config.feedForwardGain);
-    pid_config.gyroInfluence = ConfigManager::instance().getFloat("pid/gyro_inf", pid_config.gyroInfluence);
-    pid_config.headingChangeRate = ConfigManager::instance().getFloat("pid/hroc", pid_config.headingChangeRate);
-    pid_config.useGyroFeedforward = ConfigManager::instance().getBool("pid/gyro_ff", pid_config.useGyroFeedforward);
-
     test_value_ = ConfigManager::instance().getInt("vdc/cmd", test_value_);
     test_delay_ = ConfigManager::instance().getInt("vdc/delay", test_delay_);
     test_repeat_ = ConfigManager::instance().getInt("vdc/repeat", test_repeat_);
-
-    if (pid_config.kP != config_.pid_config.kP ||
-        pid_config.kI != config_.pid_config.kI ||
-        pid_config.kD != config_.pid_config.kD) {
-        ESP_LOGI(TAG, "PID parameters updated: P=%.2f, I=%.2f, D=%.2f",
-                pid_config.kP, pid_config.kI, pid_config.kD);
-        }
-
-    config_.pid_config = pid_config;
-    steering_pid_.updateConfig(pid_config);
 }
 
 void VehicleDynamicsController::controllerTask(void* arg) {
@@ -128,8 +92,6 @@ void VehicleDynamicsController::controllerTask(void* arg) {
     constexpr auto ch_arm = static_cast<size_t>(sensor::SbusChannel::AUX10);
 
     while(true) {
-        const float deltaTime = static_cast<float>(controller->config_.task_period) / 1000.0f;
-
         const sensor::SbusData& sbus_data = vehicle_data.getSbus();
         const sensor::ImuData& imu_data = vehicle_data.getImu();
 
@@ -141,20 +103,7 @@ void VehicleDynamicsController::controllerTask(void* arg) {
             continue;
         }
 
-        if (sbus_data.channels_scaled[toggle_pidloop] > 1900 && !controller->use_pidloop_) {
-            ESP_LOGI(TAG, "PID control enabled");
-            controller->enablePID(true);
-        } else if (sbus_data.channels_scaled[toggle_pidloop] < 1900 && controller->use_pidloop_) {
-            ESP_LOGI(TAG, "PID control disabled");
-            controller->enablePID(false);
-        }
-
-        if (!controller->use_pidloop_) {                            // Direct control mode
-            controller->updateSteering(sbus_data.channels_scaled[ch_steering]);
-        } else {                                                    // PID assisted control mode
-            // const sensor::channel_t steering_output = controller->steering_pid_.update(sbus_data, imu_data, deltaTime);
-            // controller->updateSteering(steering_output);
-         }
+        controller->updateSteering(sbus_data.channels_scaled[ch_steering]);
 
         if (sbus_data.channels_scaled[ch_debug] > 1900) {
             ESP_LOGI(TAG, "Debug command received");

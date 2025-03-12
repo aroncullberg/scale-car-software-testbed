@@ -8,7 +8,6 @@
 #include "esc_driver.h"
 #include "quaternion.h"
 #include "config_manager.h"
-#include "steering_pid.h"
 
 #include <memory>
 #include <functional>
@@ -19,8 +18,6 @@ public:
         Servo::Config steering_servo;
 
         EscDriver::Config esc_config;
-
-        SteeringPID::Config pid_config;
 
         uint32_t task_stack_size{4096};
         uint8_t task_priority{5};
@@ -52,16 +49,14 @@ private:
     Config config_;
     Servo steering_servo_;
     EscDriver esc_driver_;
-    SteeringPID steering_pid_;
     TaskHandle_t task_handle_{nullptr};
 
-    bool use_pidloop_{false};
     bool is_running_{false};
     bool armed_{false};
 
-    int test_value_{21};
+    int test_value_{2};
     int test_delay_{500};
-    int test_repeat_{12};
+    int test_repeat_{1};
 
     std::function<void()> callback_;
 };
