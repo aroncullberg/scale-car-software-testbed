@@ -10,7 +10,6 @@
 #include "vdc.h"
 #include "log_monitor.h"
 #include "config_manager.h"
-#include "steering_pid.h"
 
 #ifndef TAG
 #define TAG "main"
