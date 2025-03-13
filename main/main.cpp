@@ -116,7 +116,7 @@ extern "C" [[noreturn]] void app_main(void) {
         .steering_servo = servo_config,
         .esc_config = esc_config,
         .task_stack_size = 4096,
-        .task_priority = 5,
+        .task_priority = 7,
         .task_period = pdMS_TO_TICKS(10)
     };
 
