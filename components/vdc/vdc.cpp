@@ -99,7 +99,8 @@ void VehicleDynamicsController::controllerTask(void* arg) {
 
     constexpr auto ch_throttle = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
     constexpr auto ch_steering = static_cast<size_t>(sensor::SbusChannel::STEERING);
-    constexpr auto toggle_pidloop = static_cast<size_t>(sensor::SbusChannel::AUX7);
+    constexpr auto pid_state = static_cast<size_t>(sensor::SbusChannel::AUX3);
+    constexpr auto toggle_pidloop = static_cast<size_t>(sensor::SbusChannel::AUX4);
     constexpr auto arm_switch = static_cast<size_t>(sensor::SbusChannel::AUX8);
     constexpr auto ch_debug = static_cast<size_t>(sensor::SbusChannel::AUX9);
     constexpr auto ch_arm = static_cast<size_t>(sensor::SbusChannel::AUX10);
@@ -126,21 +127,32 @@ void VehicleDynamicsController::controllerTask(void* arg) {
             ESP_LOGI(TAG, "PID loop disabled (switch)");
         }
 
-        const bool throttleActive = sbus_data.channels_scaled[0] > 10;
-        const uint32_t currentTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
-        if (throttleActive) {
-            controller->pid_last_throttle_active_time = currentTime;
-            if (controller->pid_state_ == PidState::SUSPENDED) {
-                controller->pid_state_ = PidState::ACTIVE;
-                ESP_LOGI(TAG, "PID reactivated due to throttle application");
-            }
-        } else {
-            // If throttle has been inactive for the timeout period, reset reference
-            if ((currentTime - controller->pid_last_throttle_active_time) > controller->pid_reset_timeout_ms_ && controller->pid_state_ == PidState::ACTIVE) {
-                controller->pid_state_ = PidState::SUSPENDED;
-                ESP_LOGI(TAG, "PID suspended due to throttle cut for %ldms", controller->pid_reset_timeout_ms_);
-            }
+        if (sbus_data.channels_scaled[pid_state] > 800 && sbus_data.channels_scaled[pid_state] < 1200 && controller->pid_state_ != PidState::GYROFF) {
+            controller->pid_state_ = PidState::GYROFF;
+            ESP_LOGI(TAG, "PID state set to GYROFF");
+        } else if (sbus_data.channels_scaled[pid_state] > 1900 && sbus_data.channels_scaled[pid_state] < 2100 && controller->pid_state_ != PidState::QUATMODE) {
+            controller->pid_state_ = PidState::QUATMODE;
+            ESP_LOGI(TAG, "PID state set to QUATMODE");
+        } else if (sbus_data.channels_scaled[pid_state] < 800 && controller->pid_state_ != PidState::RATE) {
+            controller->pid_state_ = PidState::RATE;
+            ESP_LOGI(TAG, "PID state set to RATE");
         }
+
+        // const bool throttleActive = sbus_data.channels_scaled[0] > 10;
+        // const uint32_t currentTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        // if (throttleActive) {
+        //     controller->pid_last_throttle_active_time = currentTime;
+        //     if (controller->pid_state_ == PidState::SUSPENDED) {
+        //         controller->pid_state_ = PidState::ACTIVE;
+        //         ESP_LOGI(TAG, "PID reactivated due to throttle application");
+        //     }
+        // } else {
+        //     // If throttle has been inactive for the timeout period, reset reference
+        //     if ((currentTime - controller->pid_last_throttle_active_time) > controller->pid_reset_timeout_ms_ && controller->pid_state_ == PidState::ACTIVE) {
+        //         controller->pid_state_ = PidState::SUSPENDED;
+        //         ESP_LOGI(TAG, "PID suspended due to throttle cut for %ldms", controller->pid_reset_timeout_ms_);
+        //     }
+        // }
 
         controller->updateSteering(sbus_data.channels_scaled[ch_steering]);
 
@@ -182,6 +194,116 @@ esp_err_t VehicleDynamicsController::updateThrottle(sensor::channel_t throttle_v
     return esc_driver_.set_all_throttles(throttle_value);
 }
 
-esp_err_t VehicleDynamicsController::updateSteering(uint16_t steering_value) {
-    return steering_servo_.setPosition(steering_value);
+esp_err_t VehicleDynamicsController::updateSteering(sensor::channel_t steering_value) {
+            static uint32_t count = 0;
+    // Get IMU data
+    const sensor::ImuData& imu_data = VehicleData::instance().getImu();
+
+    // Direct steering if PID is not active
+    if (pid_state_ == PidState::SUSPENDED || pid_state_ == PidState::DISABLED) {
+        return steering_servo_.setPosition(steering_value);
+    }
+
+    // Calculate current heading from quaternion
+    float current_heading = extractHeadingFromQuaternion(imu_data);
+
+    // Initialize output to neutral position
+    float output = 1000.0f;
+
+    // Calculate steering output based on current mode
+    switch (pid_state_) {
+        case PidState::QUATMODE: {
+            // Update reference heading based on steering input
+            heading_reference_ += mapSteeringToRate(steering_value) * 0.02f; // Assuming 50Hz (20ms)
+
+            // Calculate heading error
+            float heading_error = calculateHeadingError(current_heading, heading_reference_);
+
+            // Simple P control
+            output = 1000 + kp_heading_ * heading_error * 1000.0f; // Scale appropriately
+
+            if (count++ % 10 == 0) {
+                ESP_LOGI(TAG, "QUAT - Ref: %.2f, Curr: %.2f, Err: %.2f, Out: %.2f",
+                      heading_reference_, current_heading, heading_error, output);
+            }
+            break;
+        }
+
+        case PidState::GYROFF: {
+            // Similar to QUATMODE but with gyro feed forward
+            heading_reference_ += mapSteeringToRate(steering_value) * 0.02f;
+            float heading_error = calculateHeadingError(current_heading, heading_reference_);
+
+            // P control with feed forward
+            float pid_term = kp_heading_ * heading_error * 1000.0f;
+            float ff_term = ff_gain_ * imu_data.gyro_z;
+            output = 1000 + pid_term + ff_term;
+            if (count++ % 10 == 0) {
+                ESP_LOGI(TAG, "GYROFF - Err: %.2f, PID: %.2f, FF: %.2f, Out: %.2f",
+                         heading_error, pid_term, ff_term, output);
+            }
+
+            break;
+        }
+
+        case PidState::RATE: {
+            // Pure rate control mode
+            float target_rate = mapSteeringToRate(steering_value);
+            float current_rate = static_cast<float>(imu_data.gyro_z) / 64.0f; // Convert to dps
+            float rate_error = target_rate - current_rate;
+
+            // Simple P control on rate
+            output = 1000 + kp_heading_ * rate_error * 1000.0f;
+
+            if (count++ % 10 == 0) {
+                ESP_LOGI(TAG, "RATE - Target: %.2f dps, Current: %.2f dps, Error: %.2f, Out: %.2f",
+                         target_rate, current_rate, rate_error, output);
+            }
+
+            break;
+        }
+
+        default:
+            // Default to direct steering
+            output = steering_value;
+            break;
+    }
+
+    // Clamp output to valid range
+    output = std::clamp(output, 0.0f, 2000.0f);
+
+    return steering_servo_.setPosition(static_cast<uint16_t>(output));
+}
+
+float VehicleDynamicsController::extractHeadingFromQuaternion(const sensor::ImuData& imu_data) {
+    // Convert from fixed-point to floating point
+    constexpr float Q30_TO_FLOAT = 1.0f / (1 << 30);
+    float qx = imu_data.quat9_x * Q30_TO_FLOAT;
+    float qy = imu_data.quat9_y * Q30_TO_FLOAT;
+    float qz = imu_data.quat9_z * Q30_TO_FLOAT;
+
+    // Calculate w (assuming quaternion is normalized)
+    float w_squared = 1.0f - (qx*qx + qy*qy + qz*qz);
+    float w = (w_squared > 0.0f) ? sqrtf(w_squared) : 0.0f;
+
+    // Extract yaw (heading) angle from quaternion
+    return atan2f(2.0f * (w * qz + qx * qy), 1.0f - 2.0f * (qy * qy + qz * qz));
+}
+
+float VehicleDynamicsController::calculateHeadingError(float current_heading, float reference_heading) {
+    float error = reference_heading - current_heading;
+
+    // Normalize error to [-π, π] range
+    if (error > M_PI) error -= 2.0f * M_PI;
+    if (error < -M_PI) error += 2.0f * M_PI;
+
+    return error;
+}
+
+float VehicleDynamicsController::mapSteeringToRate(sensor::channel_t steering_value) {
+    // Map 0-2000 to rate (centered at 1000)
+    float normalized = (static_cast<float>(steering_value) - 1000.0f) / 1000.0f;
+
+    // Scale to reasonable rate range (±π/2 rad/s ≈ ±90°/s)
+    return normalized * (M_PI / 2.0f);
 }
