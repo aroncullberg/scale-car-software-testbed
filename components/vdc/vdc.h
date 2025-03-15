@@ -53,13 +53,32 @@ private:
     enum class PidState {
         ACTIVE,
         SUSPENDED,
-        DISABLED
+        DISABLED,
+        RATE,
+        GYROFF,
+        QUATMODE,
     };
 
     PidState pid_state_{PidState::DISABLED};
 
     uint32_t pid_last_throttle_active_time{0};
     uint32_t pid_reset_timeout_ms_{1000}; // 1 second default
+
+    float heading_reference_ = 0.0f;    // Target heading in radians
+
+    // Extract heading from quaternion
+    float extractHeadingFromQuaternion(const sensor::ImuData& imu_data);
+
+    // Calculate normalized heading error (-π to π)
+    float calculateHeadingError(float current_heading, float reference_heading);
+
+    // Map steering channel to rate of change
+    float mapSteeringToRate(sensor::channel_t steering_value);
+
+
+    // PID gains (start with conservative values)
+    float kp_heading_ = 0.5f;           // Proportional gain for heading
+    float ff_gain_ = 0.01f;             // Feed forward gain for gyro
 
     bool is_running_{false};
     bool armed_{false};
