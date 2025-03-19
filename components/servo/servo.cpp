@@ -155,7 +155,7 @@ uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
                           static_cast<uint32_t>(config_.max_pulse_width_us));
     }
 
-    if (range_ < 0 || range_ > 50) {
+    if (range_ < 0 || range_ > 75) {
         ESP_LOGW(TAG, "Range out of bounds: %d, setting to default 20%%", range_);
         range_ = 20;
     }

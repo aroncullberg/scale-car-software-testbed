@@ -42,7 +42,7 @@ private:
     static constexpr auto TAG = "VehicleDynamics";
 
     static void controllerTask(void* arg);
-    esp_err_t updateSteering(sensor::channel_t steering_value);
+    esp_err_t updateSteering(sensor::channel_t steering_value, const sensor::ImuData& imu_data);
     esp_err_t updateThrottle(sensor::channel_t throttle_value);
 
     Config config_;
@@ -52,33 +52,27 @@ private:
 
     enum class PidState {
         ACTIVE,
-        SUSPENDED,
-        DISABLED,
-        RATE,
-        GYROFF,
-        QUATMODE,
+        DISABLED
     };
 
-    PidState pid_state_{PidState::DISABLED};
 
-    uint32_t pid_last_throttle_active_time{0};
-    uint32_t pid_reset_timeout_ms_{1000}; // 1 second default
+    PidState pid_state_{PidState::ACTIVE};
 
-    float heading_reference_ = 0.0f;    // Target heading in radians
+    // New methods for control modes
+    esp_err_t processRateControl(sensor::channel_t steering_value, const sensor::ImuData& imu_data);
+    esp_err_t processGyroFeedForward(sensor::channel_t steering_value, const sensor::ImuData& imu_data);
+    esp_err_t processCombinedControl(sensor::channel_t steering_value, const sensor::ImuData& imu_data);
 
-    // Extract heading from quaternion
-    float extractHeadingFromQuaternion(const sensor::ImuData& imu_data);
+    void resetPidController();
 
-    // Calculate normalized heading error (-π to π)
-    float calculateHeadingError(float current_heading, float reference_heading);
-
-    // Map steering channel to rate of change
-    float mapSteeringToRate(sensor::channel_t steering_value);
-
-
-    // PID gains (start with conservative values)
-    float kp_heading_ = 0.5f;           // Proportional gain for heading
-    float ff_gain_ = 0.01f;             // Feed forward gain for gyro
+    float rate_p_gain_{10.0f};          // P gain for rate control
+    float rate_i_gain_{0.05f};
+    float rate_d_gain_{0.5f};
+    float max_turn_rate_{90.0f};        // deg/s
+    float integral_sum_{0.0f};          // Accumulated error for I term
+    float previous_error_{0.0f};        // Previous error for D term
+    uint64_t previous_time_{0};
+    float anti_windup_limit_{10.0f};    // Limit to prevent integral windup
 
     bool is_running_{false};
     bool armed_{false};

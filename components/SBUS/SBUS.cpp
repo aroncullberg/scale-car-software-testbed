@@ -84,7 +84,7 @@ esp_err_t SBUS::start() {
         "sbus_task",                        // task name
         4096,                               // stack
         this,                               // ???
-        5,                                  // Task priority 
+        4,                                  // Task priority
         &task_handle_ ,                      // self-explanatory
         1
     );
@@ -159,7 +159,7 @@ void SBUS::sbusTask(void* parameters) {
             
             instance->buffer_index_ = 0;
         }
-        // vTaskDelay(1);
+        // vTaskDelay(pdMS_TO_TICKS(5)); // Prevent task starvation
     }
 }
 
@@ -223,12 +223,18 @@ void SBUS::processFrame(const uint8_t* frame, size_t len) {
 
 
 void SBUS::monitorSignalQuality() {
-    static constexpr float NOMINAL_FRAME_INTERVAL = 14.0f; // SBUS runs at ~70Hz (14ms)
+    static constexpr float NOMINAL_FRAME_INTERVAL = 10.0f; // SBUS runs at ~70Hz (14ms)
     static constexpr float FRAME_INTERVAL_TOLERANCE = 10.0f; // ±5ms
 
     bool timing_ok = abs(current_data_.quality.frame_interval_ms - NOMINAL_FRAME_INTERVAL) < FRAME_INTERVAL_TOLERANCE;
 
     current_data_.quality.valid_signal = timing_ok;
+
+    if (!timing_ok) {
+        ESP_LOGW(TAG, "Signal quality: %s, Frame interval: %.2fms",
+                 timing_ok ? "OK" : "BAD", current_data_.quality.frame_interval_ms);
+    }
+
 
     static constexpr int WINDOW_SIZE = 5; // TODO: evaluate if this should be moved to menuconfig
     static int good_frames = 0;
