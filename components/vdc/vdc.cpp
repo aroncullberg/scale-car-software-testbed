@@ -57,7 +57,7 @@ esp_err_t VehicleDynamicsController::stop() {
         return ESP_ERR_INVALID_STATE;
     }
 
-    esc_driver_.set_all_throttles(0);
+    esc_driver_.set_all_throttles(sensor::Motor::FAILSAFE_THROTTLE);
 
     // Clean up task
     if (task_handle_ != nullptr) {
@@ -76,20 +76,39 @@ void VehicleDynamicsController::updateFromConfig() {
     test_delay_ = ConfigManager::instance().getInt("vdc/delay", test_delay_);
     test_repeat_ = ConfigManager::instance().getInt("vdc/repeat", test_repeat_);
 
-    // TODO: make this update stuff for pid ctrlr too
-}
-
-namespace {
-    float mapChannelToRange(uint16_t channel_value, float min_val, float max_val) {
-        if (channel_value > 2000) channel_value = 2000;
-
-        // Map to 0.0-1.0 range
-        float normalized = (static_cast<float>(channel_value)) / 2000.0f;
-
-        // Map to target range
-        return min_val + normalized * (max_val - min_val);
+    float new_rate_p_gain = ConfigManager::instance().getFloat("vdc/kp", rate_p_gain_);
+    if (new_rate_p_gain != rate_p_gain_) {
+        ESP_LOGI(TAG, "Rate P gain changed: %.2f -> %.2f", rate_p_gain_, new_rate_p_gain);
+        rate_p_gain_ = new_rate_p_gain;
+    }
+    float new_rate_i_gain_ = ConfigManager::instance().getFloat("vdc/ki", rate_i_gain_);
+    if (new_rate_i_gain_ != rate_i_gain_) {
+        ESP_LOGI(TAG, "Rate I gain changed: %.2f -> %.2f", rate_i_gain_, new_rate_i_gain_);
+        rate_i_gain_ = new_rate_i_gain_;
+    }
+    float new_rate_d_gain_ = ConfigManager::instance().getFloat("vdc/kd", rate_d_gain_);
+    if (new_rate_d_gain_ != rate_d_gain_) {
+        ESP_LOGI(TAG, "Rate D gain changed: %.2f -> %.2f", rate_d_gain_, new_rate_d_gain_);
+        rate_d_gain_ = new_rate_d_gain_;
+    }
+    float new_anti_windup_limit_ = ConfigManager::instance().getFloat("vdc/anti_windup", anti_windup_limit_);
+    if (new_anti_windup_limit_ != anti_windup_limit_) {
+        ESP_LOGI(TAG, "Anti-windup limit changed: %.2f -> %.2f", anti_windup_limit_, new_anti_windup_limit_);
+        anti_windup_limit_ = new_anti_windup_limit_;
+    }
+    float new_max_turn_rate_ = ConfigManager::instance().getFloat("vdc/turnrate", max_turn_rate_);
+    if (new_max_turn_rate_ != max_turn_rate_) {
+        ESP_LOGI(TAG, "Max turn rate changed: %.2f -> %.2f", max_turn_rate_, new_max_turn_rate_);
+        max_turn_rate_ = new_max_turn_rate_;
     }
 }
+
+void VehicleDynamicsController::resetPidController() {
+    integral_sum_ = 0.0f;
+    previous_error_ = 0.0f;
+    previous_time_ = esp_timer_get_time();
+}
+
 
 void VehicleDynamicsController::controllerTask(void* arg) {
     auto* controller = static_cast<VehicleDynamicsController*>(arg);
@@ -100,10 +119,8 @@ void VehicleDynamicsController::controllerTask(void* arg) {
     constexpr auto ch_throttle = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
     constexpr auto ch_steering = static_cast<size_t>(sensor::SbusChannel::STEERING);
     constexpr auto pid_state = static_cast<size_t>(sensor::SbusChannel::AUX3);
-    constexpr auto toggle_pidloop = static_cast<size_t>(sensor::SbusChannel::AUX4);
     constexpr auto arm_switch = static_cast<size_t>(sensor::SbusChannel::AUX8);
-    constexpr auto ch_debug = static_cast<size_t>(sensor::SbusChannel::AUX9);
-    constexpr auto ch_arm = static_cast<size_t>(sensor::SbusChannel::AUX10);
+    // constexpr auto ch_debug = static_cast<size_t>(sensor::SbusChannel::AUX9);
 
     while(true) {
         const sensor::SbusData& sbus_data = vehicle_data.getSbus();
@@ -116,62 +133,24 @@ void VehicleDynamicsController::controllerTask(void* arg) {
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
-
-        bool pid_enabled = sbus_data.channels_scaled[toggle_pidloop] > 1900;
-        if (pid_enabled && controller->pid_state_ == PidState::DISABLED) {
-            controller->pid_state_ = PidState::ACTIVE;
-            ESP_LOGI(TAG, "PID loop enabled (switch)");
-        } else if (!pid_enabled && (controller->pid_state_ == PidState::ACTIVE ||
-                   controller->pid_state_ == PidState::SUSPENDED)) {
+        if (sbus_data.channels_scaled[pid_state] > 1900 && controller->pid_state_ != PidState::DISABLED) {
             controller->pid_state_ = PidState::DISABLED;
-            ESP_LOGI(TAG, "PID loop disabled (switch)");
+            controller->resetPidController();
+            ESP_LOGI(TAG, "P(ID) loop state set to DISABLED");
+        } else if (sbus_data.channels_scaled[pid_state] < 1900 && controller->pid_state_ != PidState::ACTIVE) {
+            controller->pid_state_ = PidState::ACTIVE;
+            ESP_LOGI(TAG, "P(ID) loop state set to ACTIVE");
         }
 
-        if (sbus_data.channels_scaled[pid_state] > 800 && sbus_data.channels_scaled[pid_state] < 1200 && controller->pid_state_ != PidState::GYROFF) {
-            controller->pid_state_ = PidState::GYROFF;
-            ESP_LOGI(TAG, "PID state set to GYROFF");
-        } else if (sbus_data.channels_scaled[pid_state] > 1900 && sbus_data.channels_scaled[pid_state] < 2100 && controller->pid_state_ != PidState::QUATMODE) {
-            controller->pid_state_ = PidState::QUATMODE;
-            ESP_LOGI(TAG, "PID state set to QUATMODE");
-        } else if (sbus_data.channels_scaled[pid_state] < 800 && controller->pid_state_ != PidState::RATE) {
-            controller->pid_state_ = PidState::RATE;
-            ESP_LOGI(TAG, "PID state set to RATE");
-        }
-
-        // const bool throttleActive = sbus_data.channels_scaled[0] > 10;
-        // const uint32_t currentTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
-        // if (throttleActive) {
-        //     controller->pid_last_throttle_active_time = currentTime;
-        //     if (controller->pid_state_ == PidState::SUSPENDED) {
-        //         controller->pid_state_ = PidState::ACTIVE;
-        //         ESP_LOGI(TAG, "PID reactivated due to throttle application");
-        //     }
-        // } else {
-        //     // If throttle has been inactive for the timeout period, reset reference
-        //     if ((currentTime - controller->pid_last_throttle_active_time) > controller->pid_reset_timeout_ms_ && controller->pid_state_ == PidState::ACTIVE) {
-        //         controller->pid_state_ = PidState::SUSPENDED;
-        //         ESP_LOGI(TAG, "PID suspended due to throttle cut for %ldms", controller->pid_reset_timeout_ms_);
-        //     }
+        // if (sbus_data.channels_scaled[ch_debug] > 1900) {
+        //     ESP_LOGI(TAG, "Debug command received");
+        //     controller->esc_driver_.debug(
+        //         controller->test_value_,
+        //         controller->test_delay_,
+        //         controller->test_repeat_
+        //     );
+        //     vTaskDelay(pdMS_TO_TICKS(350));
         // }
-
-        controller->updateSteering(sbus_data.channels_scaled[ch_steering]);
-
-        if (sbus_data.channels_scaled[ch_debug] > 1900) {
-            ESP_LOGI(TAG, "Debug command received");
-            controller->esc_driver_.debug(
-                controller->test_value_,
-                controller->test_delay_,
-                controller->test_repeat_
-            );
-            vTaskDelay(pdMS_TO_TICKS(350));
-        }
-
-        if (sbus_data.channels_scaled[ch_arm] > 1900) {
-            ESP_LOGI(TAG, "Arm command received");
-            controller->esc_driver_.arm_all();
-            vTaskDelay(pdMS_TO_TICKS(350));
-        }
-
 
         if (sbus_data.channels_scaled[arm_switch] > 1900 && !controller->armed_) {
             controller->armed_ = true;
@@ -186,6 +165,9 @@ void VehicleDynamicsController::controllerTask(void* arg) {
             controller->updateThrottle(sbus_data.channels_scaled[ch_throttle]);
         }
 
+        controller->updateSteering(sbus_data.channels_scaled[ch_steering], imu_data);
+
+
         vTaskDelayUntil(&last_wake_time, controller->config_.task_period);
     }
 }
@@ -194,116 +176,50 @@ esp_err_t VehicleDynamicsController::updateThrottle(sensor::channel_t throttle_v
     return esc_driver_.set_all_throttles(throttle_value);
 }
 
-esp_err_t VehicleDynamicsController::updateSteering(sensor::channel_t steering_value) {
-            static uint32_t count = 0;
-    // Get IMU data
-    const sensor::ImuData& imu_data = VehicleData::instance().getImu();
-
-    // Direct steering if PID is not active
-    if (pid_state_ == PidState::SUSPENDED || pid_state_ == PidState::DISABLED) {
+esp_err_t VehicleDynamicsController::updateSteering(sensor::channel_t steering_value, const sensor::ImuData& imu_data) {
+    if (!is_running_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (pid_state_ == PidState::DISABLED) {
         return steering_servo_.setPosition(steering_value);
     }
 
-    // Calculate current heading from quaternion
-    float current_heading = extractHeadingFromQuaternion(imu_data);
+    uint64_t current_time = esp_timer_get_time();
+    float dt = (current_time - previous_time_) / 1000000.0f; // μs -> s
+    if (dt > 0.1f) dt = 0.02f;
+    previous_time_ = current_time;
 
-    // Initialize output to neutral position
-    float output = 1000.0f;
+    const float norm_steering = (static_cast<float>(steering_value) - 1000.0f) / 1000.0f;
+    const float desired_rate = norm_steering * max_turn_rate_;
+    const float current_rate = imu_data.gyro_z * sensor::ImuData::GYRO_TO_DPS;
 
-    // Calculate steering output based on current mode
-    switch (pid_state_) {
-        case PidState::QUATMODE: {
-            // Update reference heading based on steering input
-            heading_reference_ += mapSteeringToRate(steering_value) * 0.02f; // Assuming 50Hz (20ms)
+    const float error = desired_rate - current_rate;
 
-            // Calculate heading error
-            float heading_error = calculateHeadingError(current_heading, heading_reference_);
+    // P - TERM
+    float p_output = error * rate_p_gain_;
 
-            // Simple P control
-            output = 1000 + kp_heading_ * heading_error * 1000.0f; // Scale appropriately
+    // I - TERM
+    integral_sum_ += error * dt;
+    integral_sum_ = std::clamp(integral_sum_, -anti_windup_limit_, anti_windup_limit_);
+    const float i_output = integral_sum_ * rate_i_gain_;
 
-            if (count++ % 10 == 0) {
-                ESP_LOGI(TAG, "QUAT - Ref: %.2f, Curr: %.2f, Err: %.2f, Out: %.2f",
-                      heading_reference_, current_heading, heading_error, output);
-            }
-            break;
-        }
+    // D - TERM
+    // TODO: Add low-pass filter to gyro rate
+    const float error_rate = (error - previous_error_) / dt;
+    previous_error_ = error;
+    const float d_output = error_rate * rate_d_gain_;
 
-        case PidState::GYROFF: {
-            // Similar to QUATMODE but with gyro feed forward
-            heading_reference_ += mapSteeringToRate(steering_value) * 0.02f;
-            float heading_error = calculateHeadingError(current_heading, heading_reference_);
+    const float pid_output = p_output + i_output + d_output;
 
-            // P control with feed forward
-            float pid_term = kp_heading_ * heading_error * 1000.0f;
-            float ff_term = ff_gain_ * imu_data.gyro_z;
-            output = 1000 + pid_term + ff_term;
-            if (count++ % 10 == 0) {
-                ESP_LOGI(TAG, "GYROFF - Err: %.2f, PID: %.2f, FF: %.2f, Out: %.2f",
-                         heading_error, pid_term, ff_term, output);
-            }
+    int16_t output = sensor::Servo::NEUTRAL_POSITION + static_cast<int16_t>(pid_output);
 
-            break;
-        }
+    output = std::ranges::clamp(output, sensor::Servo::MIN_POSITION, sensor::Servo::MAX_POSITION);
 
-        case PidState::RATE: {
-            // Pure rate control mode
-            float target_rate = mapSteeringToRate(steering_value);
-            float current_rate = static_cast<float>(imu_data.gyro_z) / 64.0f; // Convert to dps
-            float rate_error = target_rate - current_rate;
-
-            // Simple P control on rate
-            output = 1000 + kp_heading_ * rate_error * 1000.0f;
-
-            if (count++ % 10 == 0) {
-                ESP_LOGI(TAG, "RATE - Target: %.2f dps, Current: %.2f dps, Error: %.2f, Out: %.2f",
-                         target_rate, current_rate, rate_error, output);
-            }
-
-            break;
-        }
-
-        default:
-            // Default to direct steering
-            output = steering_value;
-            break;
+    static uint32_t log_counter = 0;
+    if (log_counter++ % 10 == 0) {
+        ESP_LOGI(TAG, "RATE: desired=%.1f, current=%.1f, error=%.1f, output=%u",
+                 desired_rate, current_rate, error, output);
     }
 
-    // Clamp output to valid range
-    output = std::clamp(output, 0.0f, 2000.0f);
-
-    return steering_servo_.setPosition(static_cast<uint16_t>(output));
-}
-
-float VehicleDynamicsController::extractHeadingFromQuaternion(const sensor::ImuData& imu_data) {
-    // Convert from fixed-point to floating point
-    constexpr float Q30_TO_FLOAT = 1.0f / (1 << 30);
-    float qx = imu_data.quat9_x * Q30_TO_FLOAT;
-    float qy = imu_data.quat9_y * Q30_TO_FLOAT;
-    float qz = imu_data.quat9_z * Q30_TO_FLOAT;
-
-    // Calculate w (assuming quaternion is normalized)
-    float w_squared = 1.0f - (qx*qx + qy*qy + qz*qz);
-    float w = (w_squared > 0.0f) ? sqrtf(w_squared) : 0.0f;
-
-    // Extract yaw (heading) angle from quaternion
-    return atan2f(2.0f * (w * qz + qx * qy), 1.0f - 2.0f * (qy * qy + qz * qz));
-}
-
-float VehicleDynamicsController::calculateHeadingError(float current_heading, float reference_heading) {
-    float error = reference_heading - current_heading;
-
-    // Normalize error to [-π, π] range
-    if (error > M_PI) error -= 2.0f * M_PI;
-    if (error < -M_PI) error += 2.0f * M_PI;
-
-    return error;
-}
-
-float VehicleDynamicsController::mapSteeringToRate(sensor::channel_t steering_value) {
-    // Map 0-2000 to rate (centered at 1000)
-    float normalized = (static_cast<float>(steering_value) - 1000.0f) / 1000.0f;
-
-    // Scale to reasonable rate range (±π/2 rad/s ≈ ±90°/s)
-    return normalized * (M_PI / 2.0f);
+    return steering_servo_.setPosition(output);
 }

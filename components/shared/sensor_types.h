@@ -43,7 +43,7 @@ enum class SbusChannel : uint8_t {
     CHANNEL_COUNT = 16
 };
 
-    using channel_t = uint16_t;
+    using channel_t = int16_t;
 
 constexpr uint16_t RAW_MIN = 192;
 constexpr uint16_t RAW_MAX = 1792;
@@ -52,9 +52,9 @@ constexpr channel_t SCALED_MIN = 0;
 constexpr channel_t SCALED_MAX = 2000;
 
 constexpr std::array<channel_t, RAW_RANGE + 1> createScaleLookupTable() {
-    std::array<uint16_t, RAW_RANGE + 1> table{};
+    std::array<int16_t, RAW_RANGE + 1> table{};
 
-    for (uint16_t i = 0; i <= RAW_RANGE; ++i) {
+    for (int16_t i = 0; i <= RAW_RANGE; ++i) {
         // (i * SCALED_MAX + RAW_RANGE/2) / RAW_RANGE
         table[i] = static_cast<uint16_t>((static_cast<uint32_t>(i) * SCALED_MAX + (RAW_RANGE / 2)) / RAW_RANGE);
     }
@@ -132,10 +132,11 @@ struct ImuData {
     int16_t accel_z{0};  // 1 unit = 1/80?? g // (positive) Z is downwards movement (down because of NED coordinate system)
 
 
+    static constexpr float GYRO_TO_DPS = 500.0f /32768.0f;
     // right hand rule, thumb points in direction of positive axis fingers in direction of rotation
-    int16_t gyro_x{0};   // 1 unit = 1/64 dps // (positive) X is roll right
-    int16_t gyro_y{0};   // 1 unit = 1/64 dps // (positive) Y is front side up rear down, pitch up
-    int16_t gyro_z{0};   // 1 unit = 1/64 dps // (positive) Z is yaw right (clockwise when looking from above)
+    int16_t gyro_x{0};  // (positive) X is roll right
+    int16_t gyro_y{0};  // (positive) Y is front side up rear down, pitch up
+    int16_t gyro_z{0};  // (positive) Z is yaw right (clockwise when looking from above)
 
     // Quaternion orientation (Q30 format)
     int32_t  quat9_x{0};  // i component // (positive) X is roll right

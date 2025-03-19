@@ -44,8 +44,6 @@ extern "C" [[noreturn]] void app_main(void) {
         ESP_LOGI("main", "Direct access to imu/enabled: %d", imu_enabled);
     }
 
-
-
     LogMonitor::Config log_config;
     log_config.ap_ssid = "ESP32-Monitor";
     log_config.ap_password = "password";
@@ -115,9 +113,9 @@ extern "C" [[noreturn]] void app_main(void) {
     const VehicleDynamicsController::Config vd_config = {
         .steering_servo = servo_config,
         .esc_config = esc_config,
-        .task_stack_size = 4096,
+        .task_stack_size = 8162,
         .task_priority = 7,
-        .task_period = pdMS_TO_TICKS(10)
+        .task_period = pdMS_TO_TICKS(16)
     };
 
     static VehicleDynamicsController vd_controller(vd_config);
