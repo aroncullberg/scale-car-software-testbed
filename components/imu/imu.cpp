@@ -259,44 +259,27 @@ bool IMU::validDeviceId() {
 esp_err_t IMU::initializeDMP() {
     bool success = true;
 
-    // Initialize DMP with default sensors
     success &= (icm20948_init_dmp_sensor_with_defaults(&icm_device_) == ICM_20948_STAT_OK);
     
-    // Raw 6-axis sensors
-    // success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_RAW_ACCELEROMETER, 1) == ICM_20948_STAT_OK);
-    // success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_RAW_GYROSCOPE, 1) == ICM_20948_STAT_OK);
-    
-    // Calibrated 6 axis sensors
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_ACCELEROMETER, 1) == ICM_20948_STAT_OK);
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GYROSCOPE, 1) == ICM_20948_STAT_OK);
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GYROSCOPE_UNCALIBRATED, 1) == ICM_20948_STAT_OK);
 
-
-    //  - Game Rotation Vector (good for fast motion, no magnetometer)
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GAME_ROTATION_VECTOR, 1) == ICM_20948_STAT_OK);
-    //  - Rotation Vector (includes magnetometer for drift correction - slower, more accurate)
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_ROTATION_VECTOR, 1) == ICM_20948_STAT_OK);
 
-    // Derived motion data
     success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_LINEAR_ACCELERATION, 1) == ICM_20948_STAT_OK);
 
-    // Set DMP output rate for fast sensors (accel, gyro, mag(maybe later))
     success &= (inv_icm20948_set_dmp_sensor_period(&icm_device_, DMP_ODR_Reg_Accel, 0) == ICM_20948_STAT_OK);
     success &= (inv_icm20948_set_dmp_sensor_period(&icm_device_, DMP_ODR_Reg_Gyro, 0) == ICM_20948_STAT_OK);
     success &= (inv_icm20948_set_dmp_sensor_period(&icm_device_, DMP_ODR_Reg_Gyro_Calibr, 0) == ICM_20948_STAT_OK);
 
-    // Quaternion rates
-    // Quat6 - maximum rate for what we for the fast one
-    success &= (inv_icm20948_set_dmp_sensor_period(&icm_device_, DMP_ODR_Reg_Quat6, 0) == ICM_20948_STAT_OK);
-    // Slower rate (for ROTATION_VECTOR) - Not needed with Game Rotation Vector
-    success &= (inv_icm20948_set_dmp_sensor_period(&icm_device_, DMP_ODR_Reg_Quat9, 4) == ICM_20948_STAT_OK);   
+    success &= (inv_icm20948_set_dmp_sensor_period(&icm_device_, DMP_ODR_Reg_Quat6, 8) == ICM_20948_STAT_OK);
+    success &= (inv_icm20948_set_dmp_sensor_period(&icm_device_, DMP_ODR_Reg_Quat9, 8) == ICM_20948_STAT_OK);
 
-
-    // Enable FIFO and DMP
     success &= (icm20948_enable_fifo(&icm_device_, true) == ICM_20948_STAT_OK);
     success &= (icm20948_enable_dmp(&icm_device_, true) == ICM_20948_STAT_OK);
-    
-    // Reset DMP and FIFO
+
     success &= (icm20948_reset_dmp(&icm_device_) == ICM_20948_STAT_OK);
     success &= (icm20948_reset_fifo(&icm_device_) == ICM_20948_STAT_OK);
 
