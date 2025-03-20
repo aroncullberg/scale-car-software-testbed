@@ -31,6 +31,7 @@ esp_err_t VehicleDynamicsController::init() {
     return ESP_OK;
 }
 
+
 esp_err_t VehicleDynamicsController::start() {
     if (is_running_) {
         return ESP_OK;
@@ -97,11 +98,9 @@ void VehicleDynamicsController::updateFromConfig() {
         anti_windup_limit_ = new_anti_windup_limit_;
     }
     float new_max_turn_rate_ = ConfigManager::instance().getFloat("vdc/turnrate", max_turn_rate_);
-    if (new_max_turn_rate_ != max_turn_rate_) {
+    if (new_max_turn_rate_ != max_turn_rate_ && new_max_turn_rate_ > 0.0f && new_max_turn_rate_ < 180.0f) {
         ESP_LOGI(TAG, "Max turn rate changed: %.2f -> %.2f", max_turn_rate_, new_max_turn_rate_);
         max_turn_rate_ = new_max_turn_rate_;
-    } else {
-        ESP_LOGI(TAG, "Max turnrate did not change, its still: %.2f", max_turn_rate_);
     }
 }
 
@@ -130,7 +129,8 @@ void VehicleDynamicsController::controllerTask(void* arg) {
 
         if (!sbus_data.quality.valid_signal) {
             ESP_LOGW(TAG, "Invalid SBUS signal");
-            controller->steering_servo_.setPosition(sensor::Servo::FAILSAFE_POSITION);
+            // controller->steering_servo_.setPosition(sensor::Servo::FAILSAFE_POSITION);
+            controller->updateSteering(sensor::Servo::FAILSAFE_POSITION, imu_data);
             controller->esc_driver_.set_all_throttles(sensor::Motor::FAILSAFE_THROTTLE); // TODO: Change this to be a realfailsafe where the rmt driver shuts off so esc just shuts down (i hope they do atelast)
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;

@@ -12,6 +12,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -20,7 +21,8 @@ public:
     struct Config {
         const char* ap_ssid{"ESP32-Monitor"};
         const char* ap_password{"password"};
-        uint16_t tcp_port{8888};
+        uint16_t config_port{8888};
+        uint16_t log_port{7777};
 
         uint32_t server_task_stack_size{8192};
         uint8_t server_task_priority{5};
@@ -62,7 +64,12 @@ private:
     bool is_running_ = false;
     int server_socket_ = -1;
 
-    std::vector<int> client_sockets_;
+    int config_server_socket_ = -1;
+    int log_server_socket_ = -1;
+
+    // std::vector<int> client_sockets_;
+    std::map<int, bool> client_sockets_; // client_fd -> is_config_client
+
 };
 
 // Global hook function

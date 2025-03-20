@@ -4,12 +4,17 @@
 #include "esp_log.h"
 #include <data_pool.h>
 #include <cinttypes>
+#include "config_manager.h"
 
 namespace sensor {
 
 GPS::GPS(const Config& config) {
     config_t = config;
     ESP_LOGI(TAG, "GPS instance created");
+
+    callback_ = [this] { this->updateFromConfig(); };
+    ConfigManager::instance().registerCallback(callback_);
+
 }
 
 GPS::~GPS() {
@@ -25,8 +30,29 @@ esp_err_t GPS::init() {
     ESP_LOGI(TAG, "  UART Num: %d", config_t.uart_num);
     ESP_LOGI(TAG, "  RX Pin: %d", config_t.uart_rx_pin);
     ESP_LOGI(TAG, "  Baud Rate: %d", config_t.baud_rate);
+
+    updateFromConfig();
     
     return configureUART();
+}
+
+void GPS::updateFromConfig() {
+    ESP_LOGI(TAG, "Updating GPS configuration from ConfigManager");
+
+    bool new_debug_logging = ConfigManager::instance().getBool("gps/logging", debug_logging_);
+    if (new_debug_logging != debug_logging_) {
+        ESP_LOGI(TAG, "Debug logging changed: %s -> %s",
+                 new_debug_logging ? "true" : "false",
+                 debug_logging_ ? "true" : "false");
+        debug_logging_ = new_debug_logging;
+    }
+    uint8_t new_debug_logging_interval_ms = ConfigManager::instance().getInt("gps/logfreq", debug_logging_interval_ms_);
+    if (new_debug_logging_interval_ms != debug_logging_interval_ms_) {
+        ESP_LOGI(TAG, "Debug logging interval changed: %d -> %d",
+                 new_debug_logging_interval_ms,
+                 debug_logging_interval_ms_);
+        debug_logging_interval_ms_ = new_debug_logging_interval_ms;
+    }
 }
 
 esp_err_t GPS::configureUART() {
@@ -72,13 +98,23 @@ esp_err_t GPS::configureUART() {
     const auto ubx_cfg_prt = "\xB5\x62\x06\x00\x14\x00\x01\x00\x00\x00\xD0\x08\x00\x00\x00\xC2\x01\x00\x07\x00\x01\x00\x00\x00\x00\x00\xC0\x7E";
     uart_write_bytes(config_t.uart_num, ubx_cfg_prt, 28);  // Exact 28-byte UBX packet
 
-    // const char* ubx_factory_reset = 
-    //     "\xB5\x62\x06\x09\x0D\x00\xFF\xFF\x00\x00\x00\x00\x00\x00\xFF\xFF\x00\x00\x17\x2B\x7E";
+    vTaskDelay(pdMS_TO_TICKS(100));
 
-    // // In GPS::configureUART(), after initializing UART:
-    // uart_write_bytes(config_t.uart_num, ubx_factory_reset, strlen(ubx_factory_reset));
-    vTaskDelay(pdMS_TO_TICKS(100)); // Wait for command to process
-
+    const uint8_t ubx_cfg_rate[] = {
+        0xB5, 0x62,           // Header
+        0x06, 0x08,           // Class/ID (CFG-RATE)
+        0x06, 0x00,           // Length
+        0xC8, 0x00,           // measRate (200ms = 5Hz)
+        0x01, 0x00,           // navRate (1)
+        0x01, 0x00,           // timeRef (1 = GPS time)
+        0xDE, 0x6A            // Checksum
+    };
+    int written = uart_write_bytes(config_t.uart_num, ubx_cfg_rate, sizeof(ubx_cfg_rate));
+    if (written != sizeof(ubx_cfg_rate)) {
+        ESP_LOGE(TAG, "Failed to send UBX-CFG-RATE command");
+        return ESP_FAIL;
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));
 
 
 
@@ -101,20 +137,20 @@ esp_err_t GPS::start() {
         1
     );
 
-    // BaseType_t task_created1 = xTaskCreatePinnedToCore(
-    //     reportingTask,            // task function
-    //     "gps_report",             // task name
-    //     4096,                     // stack size (smaller than main GPS task)
-    //     this,                     // parameter
-    //     3,                        // lower priority than main GPS task
-    //     &reporting_task_handle_,  // task handle
-    //     1                         // core
-    // );
+    BaseType_t task_created1 = xTaskCreatePinnedToCore(
+        reportingTask,            // task function
+        "gps_report",             // task name
+        4096,                     // stack size (smaller than main GPS task)
+        this,                     // parameter
+        3,                        // lower priority than main GPS task
+        &reporting_task_handle_,  // task handle
+        1                         // core
+    );
 
-    // if (task_created1 != pdPASS) {
-    //     ESP_LOGE(TAG, "Failed to create GPS task");
-    //     return ESP_ERR_NO_MEM;
-    // }
+    if (task_created1 != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create GPS task");
+        return ESP_ERR_NO_MEM;
+    }
 
     if (task_created != pdPASS) {
         ESP_LOGE(TAG, "Failed to create GPS task");
@@ -154,10 +190,21 @@ void GPS::reportingTask(void* parameters) {
     ESP_LOGI(TAG, "GPS reporting task started");
 
     while (true) {
-        // Get current data from the data pool
-        sensor::GpsData current_data = VehicleData::instance().getGPS();
+        if (!gps->debug_logging_) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
+        GpsData current_data = VehicleData::instance().getGPS();
 
-        // Get max speed with mutex protection
+        if (!current_data.status.bits.valid_fix) {
+            ESP_LOGW(TAG, "No valid GPS fix (satellites: %u)", current_data.quality.satellites);
+            // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(2500));
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+
+
+        }
+
         uint32_t max_speed = 0;
         max_speed = gps->max_speed_mmps_;
 
@@ -165,16 +212,10 @@ void GPS::reportingTask(void* parameters) {
         float current_speed_kmh = current_data.speed_mmps / 1000.0f * 3.6f;
         float max_speed_kmh = max_speed / 1000.0f * 3.6f;
 
-        // Report the data
-        ESP_LOGI(TAG, "=== GPS STATUS REPORT ===");
-        ESP_LOGI(TAG, "Satellites: %u", current_data.quality.satellites);
-        ESP_LOGI(TAG, "Current Speed: %.2f km/h", current_speed_kmh);
-        ESP_LOGI(TAG, "Maximum Speed: %.2f km/h", max_speed_kmh);
-        ESP_LOGI(TAG, "Fix Type: %u", current_data.quality.fix_type);
-        ESP_LOGI(TAG, "========================");
+        ESP_LOGI(TAG, "%3.2f kmh (%3.2f) | sat count: %d", current_speed_kmh, max_speed_kmh, current_data.quality.satellites);
 
-        // Run at 1Hz
-        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(1000));
+        // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->debug_logging_interval_ms_));
+        vTaskDelay(pdMS_TO_TICKS(gps->debug_logging_interval_ms_));
     }
 }
 
@@ -184,8 +225,7 @@ void GPS::gpsTask(void* parameters) {
     const uart_port_t uart_num = gps->config_t.uart_num;
     
     // Buffer for reading UART data
-    uint8_t data[512];  // Smaller buffer since we process more frequently
-    
+
     ESP_LOGI(TAG, "GPS task started");
     TickType_t last_wake_time = xTaskGetTickCount();
     
@@ -195,14 +235,15 @@ void GPS::gpsTask(void* parameters) {
         uart_get_buffered_data_len(uart_num, &buffered_length);
         
         if (buffered_length > 0) {
+            uint8_t data[512];
             int read_length = uart_read_bytes(uart_num, 
-                                           data, 
-                                           std::min(static_cast<size_t>(buffered_length), 
-                                                    static_cast<size_t>(sizeof(data))),
-                                           0);  // No waiting
+                                              data,
+                                              std::min(static_cast<size_t>(buffered_length),
+                                                       static_cast<size_t>(sizeof(data))),
+                                              0);  // No waiting
             
             if (read_length > 0) {
-                ESP_LOGI(TAG, "%s", data);
+                // ESP_LOGI(TAG, "%s", data);
                 // Feed data to TinyGPS++
                 for (int i = 0; i < read_length; i++) {
                     gps->tiny_gps_.encode(data[i]);
@@ -229,8 +270,8 @@ void GPS::processGPSData() {
         // Speed data (new)
         if (tiny_gps_.speed.isValid()) {
             // Convert from knots to m/s and store as mm/s for fixed point
-            data.speed_mmps = tiny_gps_.speed.mps() * 1000;  // Need to add this to GpsData struct
-            data.ground_course = tiny_gps_.course.deg() * 100; // Store as centidegrees
+            data.speed_mmps = tiny_gps_.speed.mps() * 1000;
+            data.ground_course = tiny_gps_.course.deg() * 100;
             data.speed_valid = true;
         } else {
             data.speed_mmps = 0;
@@ -238,29 +279,19 @@ void GPS::processGPSData() {
             data.speed_valid = false;
         }
         
-        // Quality data (unchanged)
-        data.quality.fix_type = tiny_gps_.location.isValid() ? 
+        data.quality.fix_type = tiny_gps_.location.isValid() ?
             (tiny_gps_.altitude.isValid() ? 2 : 1) : 0;
         data.quality.satellites = tiny_gps_.satellites.value();
         data.quality.hdop = tiny_gps_.hdop.value() * 100;  // Convert to fixed point
         
-        // Status (unchanged)
         data.status.bits.valid_fix = tiny_gps_.location.isValid();
         data.status.bits.north_south = data.latitude < 0;
         data.status.bits.east_west = data.longitude < 0;
         
-        // Time (unchanged)
         data.time.hours = tiny_gps_.time.hour();
         data.time.minutes = tiny_gps_.time.minute();
         data.time.seconds = tiny_gps_.time.second();
         data.time.milliseconds = tiny_gps_.time.centisecond() * 10;
-
-        // ESP_LOGI(TAG, "-----------------------------------");
-        // ESP_LOGI(TAG, "latitude: %" PRIu32, data.latitude);
-        // ESP_LOGI(TAG, "longitude: %" PRIu32, data.longitude);
-        // ESP_LOGI(TAG, "fix: %" PRIu8, data.quality.fix_type);
-        // ESP_LOGI(TAG, "satellites: %" PRIu8, data.quality.satellites);
-        // ESP_LOGI(TAG, "-----------------------------------");
 
         if (data.speed_valid && data.speed_mmps > 0) {
             max_speed_mmps_ = std::max(max_speed_mmps_, data.speed_mmps);

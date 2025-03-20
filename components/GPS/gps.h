@@ -7,6 +7,8 @@
 #include "freertos/task.h"
 #include "TinyGPS++.h"
 
+#include <functional>
+
 #include "sensor_types.h"
 
 #define MATCH 0
@@ -19,7 +21,7 @@ public:
         uart_port_t uart_num{UART_NUM_1};
         gpio_num_t uart_tx_pin{GPIO_NUM_NC};
         gpio_num_t uart_rx_pin{GPIO_NUM_NC};
-        int baud_rate{9600};
+        int baud_rate{38400};
         size_t rx_buffer_size{2048};
         size_t tx_buffer_size{0};
         TickType_t task_period {pdMS_TO_TICKS(100)};
@@ -31,6 +33,8 @@ public:
     esp_err_t init();
     esp_err_t start();
     esp_err_t stop();
+
+    void updateFromConfig();
 
 private:
     static constexpr const char* TAG = "GPS";
@@ -51,8 +55,11 @@ private:
     GpsData current_data{}; // TODO: rename to current_data_
     uint32_t max_speed_mmps_{0}; // Maximum speed in mm/s
 
+    std::function<void()> callback_;
 
     bool is_running{false};
+    bool debug_logging_{false};
+    uint8_t debug_logging_interval_ms_{100};
 };
 
 }

@@ -47,7 +47,6 @@ extern "C" [[noreturn]] void app_main(void) {
     LogMonitor::Config log_config;
     log_config.ap_ssid = "ESP32-Monitor";
     log_config.ap_password = "password";
-    log_config.tcp_port = 8888;
 
     LogMonitor::instance().init(log_config);
     LogMonitor::instance().start();
@@ -68,19 +67,19 @@ extern "C" [[noreturn]] void app_main(void) {
     #endif
 
 
-    // #if CONFIG_GPS_ENABLE
-    //     sensor::GPS::Config gps_config = {
-    //         .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
-    //         .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
-    //         .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
-    //         .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
-    //         .rx_buffer_size = 2048,
-    //         .tx_buffer_size = 1024,
-    //     };
-    //     static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
-    //     ESP_ERROR_CHECK(gps.init());
-    //     ESP_ERROR_CHECK(gps.start());
-    // #endif
+    #if CONFIG_GPS_ENABLE
+        sensor::GPS::Config gps_config = {
+            .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
+            .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
+            .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
+            .baud_rate = 38400, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
+            .rx_buffer_size = 2048,
+            .tx_buffer_size = 1024,
+        };
+        static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
+        ESP_ERROR_CHECK(gps.init());
+        ESP_ERROR_CHECK(gps.start());
+    #endif
 
 
     #if CONFIG_IMU_ENABLE

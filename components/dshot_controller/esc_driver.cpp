@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "esp_check.h"
 #include "freertos/FreeRTOS.h"
+#include "config_manager.h"
 
 
 EscDriver::~EscDriver() {
@@ -21,6 +22,11 @@ EscDriver::~EscDriver() {
 esp_err_t EscDriver::init(const Config& config) {
     ESP_RETURN_ON_FALSE(!initialized_, ESP_ERR_INVALID_STATE, TAG, "Already initialized");
     ESP_RETURN_ON_FALSE(config.motor_pins.size() <= 4, ESP_ERR_INVALID_ARG, TAG, "Max 4 ESCs supported");
+
+
+    callback_ = [this] { this->updateFromConfig(); };
+    ConfigManager::instance().registerCallback(callback_);
+    updateFromConfig();
 
     config_ = config;
 
@@ -47,6 +53,18 @@ esp_err_t EscDriver::init(const Config& config) {
 
     return ESP_OK;
 }
+
+void EscDriver::updateFromConfig() {
+    ESP_LOGI(TAG, "Updating escdriver configuration from ConfigManager");
+
+    uint16_t new_throttle_limit = ConfigManager::instance().getInt("esc/tlimit", throttle_limit_);
+    if (new_throttle_limit != throttle_limit_ && new_throttle_limit > 0 && new_throttle_limit >=100 &&  new_throttle_limit <= 2000) {
+        ESP_LOGI(TAG, "Throttle limit changed: %d -> %d", throttle_limit_, new_throttle_limit);
+        throttle_limit_ = new_throttle_limit;
+    }
+
+}
+
 
 esp_err_t EscDriver::create_rmt_channel(gpio_num_t gpio_num, rmt_channel_handle_t* channel) const {
     rmt_tx_channel_config_t tx_config = {
@@ -171,8 +189,7 @@ esp_err_t EscDriver::set_throttle(MotorPosition position, sensor::channel_t inpu
     ESP_RETURN_ON_FALSE(it != motors_.end(), ESP_ERR_NOT_FOUND, TAG, "Motor position not found");
     
 
-    // Scale from o-2000 to 48-2047
-    const uint16_t dshot_throttle = std::clamp( input_throttle + 48, 48, 1500);
+    const uint16_t dshot_throttle = std::clamp(input_throttle + 48, 48, throttle_limit_ * 1); // i dont know why but i need *1 here for it to not be stupid
 
     // if (xTaskGetTickCount() % 99 == 0) {
     //     // ESP_LOGI(TAG, "Throttle value before scaling %d", input_throttle);
