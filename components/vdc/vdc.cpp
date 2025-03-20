@@ -100,6 +100,8 @@ void VehicleDynamicsController::updateFromConfig() {
     if (new_max_turn_rate_ != max_turn_rate_) {
         ESP_LOGI(TAG, "Max turn rate changed: %.2f -> %.2f", max_turn_rate_, new_max_turn_rate_);
         max_turn_rate_ = new_max_turn_rate_;
+    } else {
+        ESP_LOGI(TAG, "Max turnrate did not change, its still: %.2f", max_turn_rate_);
     }
 }
 
@@ -195,15 +197,12 @@ esp_err_t VehicleDynamicsController::updateSteering(sensor::channel_t steering_v
 
     const float error = desired_rate - current_rate;
 
-    // P - TERM
     float p_output = error * rate_p_gain_;
 
-    // I - TERM
     integral_sum_ += error * dt;
     integral_sum_ = std::clamp(integral_sum_, -anti_windup_limit_, anti_windup_limit_);
     const float i_output = integral_sum_ * rate_i_gain_;
 
-    // D - TERM
     // TODO: Add low-pass filter to gyro rate
     const float error_rate = (error - previous_error_) / dt;
     previous_error_ = error;
@@ -215,11 +214,11 @@ esp_err_t VehicleDynamicsController::updateSteering(sensor::channel_t steering_v
 
     output = std::ranges::clamp(output, sensor::Servo::MIN_POSITION, sensor::Servo::MAX_POSITION);
 
-    static uint32_t log_counter = 0;
-    if (log_counter++ % 10 == 0) {
-        ESP_LOGI(TAG, "RATE: desired=%.1f, current=%.1f, error=%.1f, output=%u",
-                 desired_rate, current_rate, error, output);
-    }
+    // static uint32_t log_counter = 0;
+    // if (log_counter++ % 10 == 0) {
+    //     ESP_LOGI(TAG, "RATE: desired=%.1f, current=%.1f, error=%.1f, output=%u (P: %.1f, I: %.1f, D: %.1f)",
+    //              desired_rate, current_rate, error, output, p_output, i_output, d_output);
+    // }
 
     return steering_servo_.setPosition(output);
 }
