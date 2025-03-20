@@ -68,7 +68,7 @@ private:
     float rate_p_gain_{10.0f};          // P gain for rate control
     float rate_i_gain_{0.05f};
     float rate_d_gain_{0.5f};
-    float max_turn_rate_{90.0f};        // deg/s
+    float max_turn_rate_{110.0f};        // deg/s
     float integral_sum_{0.0f};          // Accumulated error for I term
     float previous_error_{0.0f};        // Previous error for D term
     uint64_t previous_time_{0};

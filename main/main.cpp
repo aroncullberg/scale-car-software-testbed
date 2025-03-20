@@ -115,7 +115,7 @@ extern "C" [[noreturn]] void app_main(void) {
         .esc_config = esc_config,
         .task_stack_size = 8162,
         .task_priority = 7,
-        .task_period = pdMS_TO_TICKS(16)
+        .task_period = pdMS_TO_TICKS(8)
     };
 
     static VehicleDynamicsController vd_controller(vd_config);

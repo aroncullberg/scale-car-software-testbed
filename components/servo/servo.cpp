@@ -7,7 +7,7 @@ Servo::Servo(const Config& config) : config_(config) {
     // TODO: Clamp this value to a resnoable range
     invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
     offset_ = ConfigManager::instance().getInt("servo/offset", offset_);
-    range_ = ConfigManager::instance().getInt("servo/range", range_);
+    // range_ = ConfigManager::instance().getInt("servo/range", range_);
 
 
     callback_ = [this] { this->updateFromConfig(); };
