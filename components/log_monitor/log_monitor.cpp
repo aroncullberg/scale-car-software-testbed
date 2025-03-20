@@ -102,12 +102,17 @@ esp_err_t LogMonitor::stop() {
         server_task_ = nullptr;
     }
 
-    if (server_socket_ >= 0) {
-        close(server_socket_);
-        server_socket_ = -1;
+    if (config_server_socket_ >= 0) {
+        close(config_server_socket_);
+        config_server_socket_ = -1;
     }
 
-    for (int client : client_sockets_) {
+    if (log_server_socket_ >= 0) {
+        close(log_server_socket_);
+        log_server_socket_ = -1;
+    }
+
+    for (const auto& [client, is_config] : client_sockets_) {
         if (client >= 0) {
             close(client);
         }
@@ -190,128 +195,205 @@ void LogMonitor::serverTask(void* args) {
     char cmd_buffer[256];
     std::map<int, std::string> command_buffers;
 
-
-    // Create TCP socket
-    int server_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    if (server_sock < 0) {
-        ESP_LOGE(TAG, "Failed to create socket: %d", errno);
+    // Create config server socket
+    int config_server = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (config_server < 0) {
+        ESP_LOGE(TAG, "Failed to create config socket: %d", errno);
         vTaskDelete(NULL);
         return;
     }
 
+    // Create log server socket
+    int log_server = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (log_server < 0) {
+        ESP_LOGE(TAG, "Failed to create log socket: %d", errno);
+        close(config_server);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // Set socket options for both sockets
     int opt = 1;
-    setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    setsockopt(server_sock, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
+    setsockopt(config_server, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(config_server, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
+
+    setsockopt(log_server, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(log_server, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
 
     int send_buf_size = 8192;
-    setsockopt(server_sock, SOL_SOCKET, SO_SNDBUF, &send_buf_size, sizeof(send_buf_size));
+    setsockopt(config_server, SOL_SOCKET, SO_SNDBUF, &send_buf_size, sizeof(send_buf_size));
+    setsockopt(log_server, SOL_SOCKET, SO_SNDBUF, &send_buf_size, sizeof(send_buf_size));
 
-    struct sockaddr_in server_addr = {};
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(self->config_.tcp_port);
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    // Bind config server
+    struct sockaddr_in config_addr = {};
+    config_addr.sin_family = AF_INET;
+    config_addr.sin_port = htons(self->config_.config_port);
+    config_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        ESP_LOGE(TAG, "Failed to bind socket: %d", errno);
-        close(server_sock);
+    if (bind(config_server, (struct sockaddr *)&config_addr, sizeof(config_addr)) < 0) {
+        ESP_LOGE(TAG, "Failed to bind config socket: %d", errno);
+        close(config_server);
+        close(log_server);
         vTaskDelete(NULL);
         return;
     }
 
-    if (listen(server_sock, 4) < 0) {
-        ESP_LOGE(TAG, "Failed to listen: %d", errno);
-        close(server_sock);
+    // Bind log server
+    struct sockaddr_in log_addr = {};
+    log_addr.sin_family = AF_INET;
+    log_addr.sin_port = htons(self->config_.log_port);
+    log_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(log_server, (struct sockaddr *)&log_addr, sizeof(log_addr)) < 0) {
+        ESP_LOGE(TAG, "Failed to bind log socket: %d", errno);
+        close(config_server);
+        close(log_server);
         vTaskDelete(NULL);
         return;
     }
 
-    self->server_socket_ = server_sock;
-    ESP_LOGI(TAG, "Log server listening on port %d", self->config_.tcp_port);
+    // Listen on both sockets
+    if (listen(config_server, 4) < 0) {
+        ESP_LOGE(TAG, "Failed to listen on config socket: %d", errno);
+        close(config_server);
+        close(log_server);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    if (listen(log_server, 4) < 0) {
+        ESP_LOGE(TAG, "Failed to listen on log socket: %d", errno);
+        close(config_server);
+        close(log_server);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    self->config_server_socket_ = config_server;
+    self->log_server_socket_ = log_server;
+
+    ESP_LOGI(TAG, "Config server listening on port %d", self->config_.config_port);
+    ESP_LOGI(TAG, "Log server listening on port %d", self->config_.log_port);
 
     fd_set read_set, error_set;
     struct timeval select_timeout;
-    int max_fd = server_sock;
+    int max_fd = std::max(config_server, log_server);
 
     while (true) {
         FD_ZERO(&read_set);
         FD_ZERO(&error_set);
 
-        FD_SET(server_sock, &read_set);
+        // Add both servers to the read set
+        FD_SET(config_server, &read_set);
+        FD_SET(log_server, &read_set);
 
-        for (int client : self->client_sockets_) {
+        // Add all clients to the sets
+        for (const auto& [client, is_config] : self->client_sockets_) {
             FD_SET(client, &read_set);
             FD_SET(client, &error_set);
             max_fd = std::max(max_fd, client);
         }
 
-        select_timeout.tv_sec = 1;
-        select_timeout.tv_usec = 0;
+        select_timeout.tv_sec = 0;
+        select_timeout.tv_usec = 250000;  // 250ms = 250,000 μs (how to type μ on keyboard? annoying to have to google mu everytime i want it)
 
         int activity = select(max_fd + 1, &read_set, NULL, &error_set, &select_timeout);
 
         if (activity < 0) {
             ESP_LOGE(TAG, "select() error: %d", errno);
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            vTaskDelay(pdMS_TO_TICKS(250));
             continue;
         }
 
-        if (FD_ISSET(server_sock, &read_set)) {
+        // Check for new connections on config server
+        if (FD_ISSET(config_server, &read_set)) {
             struct sockaddr_in client_addr;
             socklen_t addr_len = sizeof(client_addr);
-            int new_client = accept(server_sock, (struct sockaddr*)&client_addr, &addr_len);
+            int new_client = accept(config_server, (struct sockaddr*)&client_addr, &addr_len);
 
             if (new_client >= 0) {
                 int flag = 1;
                 setsockopt(new_client, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
 
-                self->client_sockets_.push_back(new_client);
+                self->client_sockets_[new_client] = true; // Mark as config client
                 command_buffers[new_client] = "";
-                ESP_LOGI(TAG, "New client connected: %d", new_client);
+                ESP_LOGI(TAG, "New config client connected: %d", new_client);
 
-                const char* welcome = "=== ESP32-S3 RC Car Log Monitor ===\r\n";
+                const char* welcome = "=== ESP32-S3 RC Car Configuration ===\r\n";
                 send(new_client, welcome, strlen(welcome), 0);
+                send(new_client, "Type 'help' for available commands.\r\n", 36, 0);
             } else {
-                ESP_LOGE(TAG, "Failed to accept connection: %s (%d)", strerror(errno), errno);
-                continue;
+                ESP_LOGE(TAG, "Failed to accept config connection: %s (%d)", strerror(errno), errno);
             }
         }
 
-        for (auto it = self->client_sockets_.begin(); it != self->client_sockets_.end();) {
-            int client = *it;
+        // Check for new connections on log server
+        if (FD_ISSET(log_server, &read_set)) {
+            struct sockaddr_in client_addr;
+            socklen_t addr_len = sizeof(client_addr);
+            int new_client = accept(log_server, (struct sockaddr*)&client_addr, &addr_len);
+
+            if (new_client >= 0) {
+                int flag = 1;
+                setsockopt(new_client, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+
+                self->client_sockets_[new_client] = false; // Mark as log client
+                ESP_LOGI(TAG, "New log client connected: %d", new_client);
+
+                const char* welcome = "=== ESP32-S3 RC Car Log Stream ===\r\n";
+                send(new_client, welcome, strlen(welcome), 0);
+                send(new_client, "Log stream started. Commands are disabled on this port.\r\n", 56, 0);
+            } else {
+                ESP_LOGE(TAG, "Failed to accept log connection: %s (%d)", strerror(errno), errno);
+            }
+        }
+
+        // Check for client activity
+        auto it = self->client_sockets_.begin();
+        while (it != self->client_sockets_.end()) {
+            int client = it->first;
+            bool is_config_client = it->second;
             bool client_error = false;
 
             if (FD_ISSET(client, &error_set)) {
                 client_error = true;
             } else if (FD_ISSET(client, &read_set)) {
-                memset(cmd_buffer, 0, sizeof(cmd_buffer));
-                int bytes = recv(client, cmd_buffer, sizeof(cmd_buffer) - 1, 0);
+                if (is_config_client) {
+                    // Only process commands from config clients
+                    memset(cmd_buffer, 0, sizeof(cmd_buffer));
+                    int bytes = recv(client, cmd_buffer, sizeof(cmd_buffer) - 1, 0);
 
-                // ESP_LOGI(TAG, "Received %s from client %d", cmd_buffer, client);
+                    if (bytes > 0) {
+                        command_buffers[client].append(cmd_buffer, bytes);
 
-                if (bytes > 0) {
-                    command_buffers[client].append(cmd_buffer, bytes);
+                        size_t pos;
+                        while ((pos = command_buffers[client].find('\n')) != std::string::npos) {
+                            std::string cmd = command_buffers[client].substr(0, pos);
+                            if (!cmd.empty() && cmd.back() == '\r') {
+                                cmd.pop_back();
+                            }
 
-                    size_t pos;
-                    while ((pos = command_buffers[client].find('\n')) != std::string::npos) {
-                        std::string cmd = command_buffers[client].substr(0, pos);
-                        if (!cmd.empty() && cmd.back() == '\r') {
-                            cmd.pop_back();
+                            if (!cmd.empty()) {
+                                self->processCommand(cmd.c_str(), client);
+                            }
+
+                            command_buffers[client].erase(0, pos + 1);
                         }
-
-                        if (!cmd.empty()) {
-                            self->processCommand(cmd.c_str(), client);
-                        }
-
-                        command_buffers[client].erase(0, pos + 1);
+                    } else if (bytes <= 0) {
+                        client_error = true;
                     }
-                }
-                else if (bytes <= 0) {
-                    client_error = true;
+                } else {
+                    // For log clients, just drain any input (ignore it)
+                    char drain_buffer[256];
+                    int bytes = recv(client, drain_buffer, sizeof(drain_buffer), 0);
+                    if (bytes <= 0) {
+                        client_error = true;
+                    }
                 }
             }
 
             if (client_error) {
-                ESP_LOGI(TAG, "Client disconnected: %d", client);
+                ESP_LOGI(TAG, "Client disconnected: %d (config: %d)", client, is_config_client);
                 close(client);
                 command_buffers.erase(client);
                 it = self->client_sockets_.erase(it);
@@ -320,6 +402,7 @@ void LogMonitor::serverTask(void* args) {
             }
         }
 
+        // Process log queue
         bool more_messages = true;
         int processed_count = 0;
         const int MAX_BATCH_SIZE = 20;
@@ -328,18 +411,22 @@ void LogMonitor::serverTask(void* args) {
             if (xQueueReceive(self->log_queue_, log_buffer, 0) == pdTRUE) {
                 processed_count++;
 
-                // Send to all clients
+                // Send only to log clients
                 for (auto it = self->client_sockets_.begin(); it != self->client_sockets_.end();) {
-                    int client = *it;
-                    int result = send(*it, log_buffer, strlen(log_buffer), 0);
-                    if (result < 0) {
-                        ESP_LOGI(TAG, "Client disconnected during send: %d", client);
-                        close(client);
-                        command_buffers.erase(client);
-                        it = self->client_sockets_.erase(it);
-                    } else {
-                        ++it;
+                    int client = it->first;
+                    bool is_config = it->second;
+
+                    if (!is_config) { // Only send logs to log clients
+                        int result = send(client, log_buffer, strlen(log_buffer), 0);
+                        if (result < 0) {
+                            ESP_LOGI(TAG, "Log client disconnected during send: %d", client);
+                            close(client);
+                            command_buffers.erase(client);
+                            it = self->client_sockets_.erase(it);
+                            continue;
+                        }
                     }
+                    ++it;
                 }
             } else {
                 more_messages = false;  // Queue empty
@@ -351,6 +438,7 @@ void LogMonitor::serverTask(void* args) {
         }
     }
 }
+
 
 void LogMonitor::processCommand(const char* command_line, int client_socket) {
     char cmd[16] = {0};
@@ -374,6 +462,30 @@ void LogMonitor::processCommand(const char* command_line, int client_socket) {
             } else {
                 char error_msg[64];
                 snprintf(error_msg, sizeof(error_msg), "Error saving configuration: %d", err);
+                sendResponse(error_msg, client_socket);
+            }
+        }
+        else if (strcmp(cmd, "remove") == 0 && args >= 3) {
+            std::string key = std::string(module) + "/" + setting;
+            esp_err_t err = ConfigManager::instance().removeKey(key.c_str());
+            if (err == ESP_OK) {
+                char response[128];
+                snprintf(response, sizeof(response), "Removed key: %s", key.c_str());
+                sendResponse(response, client_socket);
+            } else {
+                char response[128];
+                snprintf(response, sizeof(response), "Error removing key %s: %d", key.c_str(), err);
+                sendResponse(response, client_socket);
+            }
+        }
+        // In processCommand function:
+        else if (strcmp(cmd, "discard") == 0) {
+            esp_err_t err = ConfigManager::instance().revert();
+            if (err == ESP_OK) {
+                sendResponse("All pending changes discarded", client_socket);
+            } else {
+                char error_msg[64];
+                snprintf(error_msg, sizeof(error_msg), "Error discarding changes: %d", err);
                 sendResponse(error_msg, client_socket);
             }
         }
@@ -508,10 +620,13 @@ void LogMonitor::handleHelpCommand(int client_socket) {
     sendResponse("Available commands:", client_socket);
     sendResponse("  get <module> <setting>     - Get a configuration value", client_socket);
     sendResponse("  set <module> <setting> <value> - Set a configuration value", client_socket);
+    sendResponse("  remove <module> <setting>  - Remove a configuration key", client_socket);
     sendResponse("  save                       - Save all configuration changes", client_socket);
+    sendResponse("  discard                    - Discard all pending changes", client_socket);
     sendResponse("  reboot                     - Restart the system", client_socket);
     sendResponse("  help                       - Show this help", client_socket);
     sendResponse("  list <module>              - List all settings for a module", client_socket);
+    sendResponse("  list *                     - List all settings", client_socket);
     sendResponse("", client_socket);
     sendResponse("Modules:", client_socket);
     sendResponse("  system  - System settings", client_socket);
@@ -522,39 +637,65 @@ void LogMonitor::handleHelpCommand(int client_socket) {
 }
 
 void LogMonitor::handleListCommand(const char* module, int client_socket) {
-    // This requires additional functionality in ConfigManager to list keys with a specific prefix
-    // For now, we'll implement a simple version with hardcoded module settings
-    sendResponse("WIP - please try again later when you have implemented this function", client_socket);
+    std::string prefix;
+    if (strcmp(module, "*") != 0) {
+        // If not wildcard, use as prefix
+        prefix = std::string(module) + "/";
+    }
 
-    // if (strcmp(module, "system") == 0) {
-    //     sendResponse("System settings:", client_socket);
-    //     sendResponse("  system/name - System name", client_socket);
-    //     sendResponse("  system/version - Firmware version", client_socket);
-    // }
-    // else if (strcmp(module, "imu") == 0) {
-    //     sendResponse("IMU settings:", client_socket);
-    //     sendResponse("  imu/enabled - Enable IMU (true/false)", client_socket);
-    //     sendResponse("  imu/update_rate - Update rate in Hz (100-1000)", client_socket);
-    // }
-    // else if (strcmp(module, "gps") == 0) {
-    //     sendResponse("GPS settings:", client_socket);
-    //     sendResponse("  gps/enabled - Enable GPS (true/false)", client_socket);
-    //     sendResponse("  gps/update_rate - Update rate in Hz (1-10)", client_socket);
-    // }
-    // else if (strcmp(module, "sbus") == 0) {
-    //     sendResponse("SBUS settings:", client_socket);
-    //     sendResponse("  sbus/enabled - Enable SBUS (true/false)", client_socket);
-    //     sendResponse("  sbus/logging/enabled - Enable logging (true/false)", client_socket);
-    //     sendResponse("  sbus/logging/channels - Channels to log (e.g. \"1,3,5-7\")", client_socket);
-    // }
-    // else if (strcmp(module, "log") == 0) {
-    //     sendResponse("Logging settings:", client_socket);
-    //     sendResponse("  log/level - Global log level (0-5)", client_socket);
-    // }
-    // else {
-    //     char response[128];
-    //     snprintf(response, sizeof(response), "Unknown module: %s", module);
-    //     sendResponse(response, client_socket);
-    // }
+    // Get keys from ConfigManager
+    std::vector<std::string> keys = ConfigManager::instance().listKeys(
+        prefix.empty() ? nullptr : prefix.c_str());
+
+    if (keys.empty()) {
+        char response[128];
+        snprintf(response, sizeof(response), "No settings found for '%s'",
+                prefix.empty() ? "any module" : module);
+        sendResponse(response, client_socket);
+        return;
+    }
+
+    // Display the keys with their types and values
+    char intro[128];
+    snprintf(intro, sizeof(intro), "Settings for %s:",
+            prefix.empty() ? "all modules" : module);
+    sendResponse(intro, client_socket);
+
+    for (const auto& key : keys) {
+        ConfigManager::ValueType type = ConfigManager::instance().getValueType(key.c_str());
+        char value_str[256];
+
+        switch (type) {
+            case ConfigManager::ValueType::BOOL:
+                snprintf(value_str, sizeof(value_str), "  %s = %s [bool]",
+                    key.c_str(),
+                    ConfigManager::instance().getBool(key.c_str()) ? "true" : "false");
+                break;
+
+            case ConfigManager::ValueType::INT:
+                snprintf(value_str, sizeof(value_str), "  %s = %ld [int]",
+                    key.c_str(),
+                    ConfigManager::instance().getInt(key.c_str()));
+                break;
+
+            case ConfigManager::ValueType::FLOAT:
+                snprintf(value_str, sizeof(value_str), "  %s = %.2f [float]",
+                    key.c_str(),
+                    ConfigManager::instance().getFloat(key.c_str()));
+                break;
+
+            case ConfigManager::ValueType::STRING:
+                snprintf(value_str, sizeof(value_str), "  %s = \"%s\" [string]",
+                    key.c_str(),
+                    ConfigManager::instance().getString(key.c_str()).c_str());
+                break;
+
+            default:
+                snprintf(value_str, sizeof(value_str), "  %s = <unknown type>",
+                    key.c_str());
+                break;
+        }
+
+        sendResponse(value_str, client_socket);
+    }
 }
-
