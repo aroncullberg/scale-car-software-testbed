@@ -11,6 +11,7 @@ idf_component_register(
         "esp_common"
         "data_pool"
         "shared"
+        "ConfigManager"
 )
 
 add_subdirectory(tinygps-espidf)

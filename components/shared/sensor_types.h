@@ -96,10 +96,10 @@ struct GpsData {
     bool speed_valid{false};   
     
     struct {
-        uint8_t fix_type{0};      
-        uint8_t satellites{0};     
+        uint8_t fix_type{0};           // 0 = no fix, 1 = 2D fix, 2 = 3D fix
+        uint8_t satellites{0};
         uint8_t satellites_used{0};
-        uint16_t hdop{0};         
+        uint16_t hdop{0};           //  Horizontal Dilution of Precision (HDOP) * 10
     } quality;
 
     union {

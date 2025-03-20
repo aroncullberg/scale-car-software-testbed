@@ -9,4 +9,5 @@ idf_component_register(
         "esp_common"
         "freertos"
         "shared"
+        "ConfigManager"
 )
