@@ -42,15 +42,22 @@ void GPS::updateFromConfig() {
     bool new_debug_logging = ConfigManager::instance().getBool("gps/logging", debug_logging_);
     if (new_debug_logging != debug_logging_) {
         ESP_LOGI(TAG, "Debug logging changed: %s -> %s",
-                 new_debug_logging ? "true" : "false",
-                 debug_logging_ ? "true" : "false");
+                 debug_logging_ ? "true" : "false",
+                 new_debug_logging ? "true" : "false");
         debug_logging_ = new_debug_logging;
+    }
+    bool new_verbose_logging = ConfigManager::instance().getBool("gps/verbose", verbose_logging_);
+    if (new_verbose_logging != verbose_logging_) {
+        ESP_LOGI(TAG, "Verbose logging changed: %s -> %s",
+                 verbose_logging_ ? "true" : "false",
+                 new_verbose_logging ? "true" : "false");
+        verbose_logging_ = new_verbose_logging;
     }
     uint8_t new_debug_logging_interval_ms = ConfigManager::instance().getInt("gps/logfreq", debug_logging_interval_ms_);
     if (new_debug_logging_interval_ms != debug_logging_interval_ms_) {
         ESP_LOGI(TAG, "Debug logging interval changed: %d -> %d",
-                 new_debug_logging_interval_ms,
-                 debug_logging_interval_ms_);
+                 debug_logging_interval_ms_,
+                 new_debug_logging_interval_ms);
         debug_logging_interval_ms_ = new_debug_logging_interval_ms;
     }
 }
@@ -243,8 +250,10 @@ void GPS::gpsTask(void* parameters) {
                                               0);  // No waiting
             
             if (read_length > 0) {
-                // ESP_LOGI(TAG, "%s", data);
-                // Feed data to TinyGPS++
+                if (gps->verbose_logging_) {
+                    // ESP_LOGI(TAG, "Read %d bytes from UART", read_length);
+                    ESP_LOGI(TAG, "%s", data);
+                }
                 for (int i = 0; i < read_length; i++) {
                     gps->tiny_gps_.encode(data[i]);
                 }

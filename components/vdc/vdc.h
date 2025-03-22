@@ -66,13 +66,15 @@ private:
     void resetPidController();
 
     float rate_p_gain_{10.0f};          // P gain for rate control
+    float rate_d_gain_{1.0f};
     float rate_i_gain_{0.05f};
-    float rate_d_gain_{0.5f};
     float max_turn_rate_{110.0f};        // deg/s
     float integral_sum_{0.0f};          // Accumulated error for I term
     float previous_error_{0.0f};        // Previous error for D term
     uint64_t previous_time_{0};
     float anti_windup_limit_{10.0f};    // Limit to prevent integral windup
+
+    bool pid_debug_{false};
 
     bool is_running_{false};
     bool armed_{false};
@@ -80,6 +82,9 @@ private:
     int test_value_{2};
     int test_delay_{500};
     int test_repeat_{1};
+
+    bool norxw_continous_{true};
+    bool rx_warned_{false};
 
     std::function<void()> callback_;
 };

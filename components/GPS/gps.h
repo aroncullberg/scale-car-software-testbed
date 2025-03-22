@@ -59,6 +59,7 @@ private:
 
     bool is_running{false};
     bool debug_logging_{false};
+    bool verbose_logging_{false};
     uint8_t debug_logging_interval_ms_{100};
 };
 
