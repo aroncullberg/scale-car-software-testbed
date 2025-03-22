@@ -15,6 +15,7 @@ VehicleDynamicsController::VehicleDynamicsController(const Config& config)
 
     callback_ = [this] { this->updateFromConfig(); };
     ConfigManager::instance().registerCallback(callback_);
+    updateFromConfig();
 }
 
 VehicleDynamicsController::~VehicleDynamicsController() {
@@ -77,6 +78,22 @@ void VehicleDynamicsController::updateFromConfig() {
     test_delay_ = ConfigManager::instance().getInt("vdc/delay", test_delay_);
     test_repeat_ = ConfigManager::instance().getInt("vdc/repeat", test_repeat_);
 
+    bool new_norxw_continous = ConfigManager::instance().getBool("vdc/norxcont", norxw_continous_);
+    if (new_norxw_continous != norxw_continous_) {
+        ESP_LOGI(TAG, "No RX warning changed: %s -> %s",
+                 new_norxw_continous ? "true" : "false",
+                 norxw_continous_ ? "true" : "false");
+        norxw_continous_ = new_norxw_continous;
+    }
+
+    bool new_pid_debug = ConfigManager::instance().getBool("vdc/pid_debug", pid_debug_);
+    if (new_pid_debug != pid_debug_) {
+        ESP_LOGI(TAG, "PID debug changed: %s -> %s",
+                 new_pid_debug ? "true" : "false",
+                 pid_debug_ ? "true" : "false");
+        pid_debug_ = new_pid_debug;
+    }
+
     float new_rate_p_gain = ConfigManager::instance().getFloat("vdc/kp", rate_p_gain_);
     if (new_rate_p_gain != rate_p_gain_) {
         ESP_LOGI(TAG, "Rate P gain changed: %.2f -> %.2f", rate_p_gain_, new_rate_p_gain);
@@ -128,13 +145,22 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         const sensor::ImuData& imu_data = vehicle_data.getImu();
 
         if (!sbus_data.quality.valid_signal) {
-            ESP_LOGW(TAG, "Invalid SBUS signal");
+            if (controller->norxw_continous_) {
+                ESP_LOGW(TAG, "Invalid SBUS signal");
+            } else if (!controller->norxw_continous_ && !controller->rx_warned_) {
+                ESP_LOGW(TAG, "Invalid SBUS signal");
+                controller->rx_warned_ = true;
+            }
             // controller->steering_servo_.setPosition(sensor::Servo::FAILSAFE_POSITION);
             controller->updateSteering(sensor::Servo::FAILSAFE_POSITION, imu_data);
             controller->esc_driver_.set_all_throttles(sensor::Motor::FAILSAFE_THROTTLE); // TODO: Change this to be a realfailsafe where the rmt driver shuts off so esc just shuts down (i hope they do atelast)
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
+        if (controller->rx_warned_) {
+            controller->rx_warned_ = false;
+        }
+
         if (sbus_data.channels_scaled[pid_state] > 1900 && controller->pid_state_ != PidState::DISABLED) {
             controller->pid_state_ = PidState::DISABLED;
             controller->resetPidController();
@@ -154,7 +180,7 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         //     vTaskDelay(pdMS_TO_TICKS(350));
         // }
 
-        if (sbus_data.channels_scaled[arm_switch] > 1900 && !controller->armed_) {
+        if (sbus_data.channels_scaled[arm_switch] > 1900 && !controller->armed_ && sbus_data.channels_scaled[ch_throttle] < 25) {
             controller->armed_ = true;
             ESP_LOGI(TAG, "Armed!");
         } else if (sbus_data.channels_scaled[arm_switch] < 1900 && controller->armed_) {
@@ -214,11 +240,11 @@ esp_err_t VehicleDynamicsController::updateSteering(sensor::channel_t steering_v
 
     output = std::ranges::clamp(output, sensor::Servo::MIN_POSITION, sensor::Servo::MAX_POSITION);
 
-    // static uint32_t log_counter = 0;
-    // if (log_counter++ % 10 == 0) {
-    //     ESP_LOGI(TAG, "RATE: desired=%.1f, current=%.1f, error=%.1f, output=%u (P: %.1f, I: %.1f, D: %.1f)",
-    //              desired_rate, current_rate, error, output, p_output, i_output, d_output);
-    // }
+    static uint32_t log_counter = 0;
+    if (pid_debug_ && log_counter++ % 10 == 0) {
+        ESP_LOGI(TAG, "RATE: desired=%.1f, current=%.1f, error=%.1f, output=%u (P: %.1f, I: %.1f, D: %.1f)",
+        desired_rate, current_rate, error, output, p_output, i_output, d_output);
+    }
 
     return steering_servo_.setPosition(output);
 }
