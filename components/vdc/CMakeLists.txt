@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS 
        "vdc.cpp"
+       "PID.cpp"
     INCLUDE_DIRS
         "."
     REQUIRES         
@@ -9,7 +10,7 @@ idf_component_register(
         "esp_common"
         "servo"
         "ConfigManager"
+        "EscDriver"
         "shared"
         "data_pool"
-        "dshot_controller"
 )

@@ -69,8 +69,6 @@ constexpr channel_t rawToScaled(const uint16_t raw_value) {
     return SBUS_SCALE_TABLE[index];
 }
 
-
-
 struct SbusData {
     // TODO: Make this use a custon type that is just a wrapper for uint16 so i can force functions to only accept channel value type.
     uint16_t channels_raw[16]{1000};
@@ -173,5 +171,24 @@ struct ImuData {
     };
 
 
-
+    struct eRPMData  // TODO: This should be a union with the throttle value
+    {
+        struct FrontRight
+        {
+            uint32_t erpm{0};
+        } front_right;
+        struct FrontLeft
+        {
+            uint32_t erpm{0};
+        } front_left;
+        struct RearLeft
+        {
+            uint32_t erpm{0};
+        } rear_left;
+        struct RearRight
+        {
+            uint32_t erpm{0};
+        } rear_right;
+        channel_t throttle_value{0};
+    };
 } // Namespace sensor
