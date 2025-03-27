@@ -4,3 +4,6 @@
 [submodule "components/GPS/tinygps-espidf"]
 	path = components/GPS/tinygps-espidf
 	url = https://github.com/aroncullberg/TinyGPSPlus-ESPIDF
+[submodule "components/EscDriver"]
+	path = components/EscDriver
+	url = https://github.com/aroncullberg/DShot-ESP32RMT
