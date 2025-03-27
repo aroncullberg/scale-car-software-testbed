@@ -1,23 +1,20 @@
 idf_component_register(
     SRCS 
         "main.cpp"
-        "dshot_rmt_encoder.c"
-        "DShotRMT.cpp"
     INCLUDE_DIRS
         "."
     REQUIRES         
         "esp_timer"
         "freertos"
-#        "data_pool"
-#        "SBUS"
-#        "GPS"
-#        "imu"
-#        "dshot_controller"
-#        "vdc"
-#        "log_monitor"
-#        "servo"
-#        "ConfigManager"
-#        "nvs_flash"
+        "data_pool"
+        "SBUS"
+        "GPS"
+        "imu"
+        "vdc"
+        "log_monitor"
+        "servo"
+        "ConfigManager"
+        "nvs_flash"
         "driver"
 )
 
