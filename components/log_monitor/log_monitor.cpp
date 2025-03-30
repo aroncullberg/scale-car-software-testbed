@@ -321,7 +321,7 @@ void LogMonitor::serverTask(void* args) {
 
                 const char* welcome = "=== ESP32-S3 RC Car Configuration ===\r\n";
                 send(new_client, welcome, strlen(welcome), 0);
-                send(new_client, "Type 'help' for available commands.\r\n", 36, 0);
+                send(new_client, "Type 'help' for available commands.\r\n\n", 41, 0);
             } else {
                 ESP_LOGE(TAG, "Failed to accept config connection: %s (%d)", strerror(errno), errno);
             }

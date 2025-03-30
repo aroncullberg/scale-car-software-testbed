@@ -84,8 +84,7 @@ extern "C" [[noreturn]] void app_main(void) {
         ESP_ERROR_CHECK(imu.init());
         ESP_ERROR_CHECK(imu.start());
     #endif
-    //
-    // Configure the steering servo
+
     Servo::Config servo_config;
     servo_config.gpio_num = static_cast<gpio_num_t>(CONFIG_SERVO_OUTPUT_GPIO);
     servo_config.freq_hz = static_cast<uint32_t>(CONFIG_SERVO_FREQUENCY_HZ);
