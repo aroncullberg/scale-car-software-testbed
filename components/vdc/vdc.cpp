@@ -31,16 +31,16 @@ esp_err_t VehicleDynamicsController::init() {
     esp_err_t err = steering_servo_.setPosition(sensor::Servo::NEUTRAL_POSITION);
     ESP_RETURN_ON_ERROR(err, TAG, "Failed to initialize steering servo");
 
-    // pid_steering_.setKd(ConfigManager::instance().getFloat("servo/kd", pid_steering_.getKd()));
-    // pid_steering_.setKp(ConfigManager::instance().getFloat("servo/kp", pid_steering_.getKp()));
-    // pid_steering_.setKi(ConfigManager::instance().getFloat("servo/ki", pid_steering_.getKi()));
-    // pid_steering_.setAntiWindupLimit(
-    //     ConfigManager::instance().getFloat("servo/antiwu", pid_steering_.getAntiWindupLimit()));
+    // TODO: Initialize pid with config values at init
+    pid_steering_.setKd(ConfigManager::instance().getFloat("steerpid/kd", pid_steering_.getKd()));
+    pid_steering_.setKi(ConfigManager::instance().getFloat("steerpid/ki", pid_steering_.getKi()));
+    pid_steering_.setKp(ConfigManager::instance().getFloat("steerpid/kp", pid_steering_.getKp()));
+    pid_steering_.setAntiWindupLimit(ConfigManager::instance().getFloat("steerpid/antiwu", pid_steering_.getAntiWindupLimit()));
 
-    pid_motor_fl_.setKp(1.0f);
-    pid_motor_fr_.setKp(1.0f);
-    pid_motor_rl_.setKp(1.0f);
-    pid_motor_rr_.setKp(1.0f);
+    pid_motor_fl_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_fl_.getKp()));
+    pid_motor_fr_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_fr_.getKp()));
+    pid_motor_rl_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_rl_.getKp()));
+    pid_motor_rr_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_rr_.getKp()));
 
     motor_fr_.begin_UNSAFE();
     motor_fl_.begin_UNSAFE();
@@ -118,15 +118,92 @@ esp_err_t VehicleDynamicsController::stop() {
 void VehicleDynamicsController::updateFromConfig() {
     ESP_LOGI(TAG, "Updating VDC configuration from ConfigManager");
 
-    // bool new_pid_debug = ConfigManager::instance().getBool("vdc/pid_debug", pid_debug_);
-    // if (new_pid_debug != pid_debug_) {
-    //     ESP_LOGI(TAG, "PID debug changed: %s -> %s",
-    //              new_pid_debug ? "true" : "false",
-    //              pid_debug_ ? "true" : "false");
-    //     pid_debug_ = new_pid_debug;
-    // }
 
-    bool new_log_erp = ConfigManager::instance().getBool("vdc/log_erpm", log_erp_);
+
+    float new_steerpid_kp = ConfigManager::instance().getFloat("steerpid/kp", pid_steering_.getKp());
+    if (new_steerpid_kp != pid_steering_.getKp()) {
+        ESP_LOGI(TAG, "Steering PID Kp changed: %f -> %f",
+                 pid_steering_.getKp(),
+                 new_steerpid_kp);
+        pid_steering_.setKp(new_steerpid_kp);
+    }
+
+    float new_steerpid_ki = ConfigManager::instance().getFloat("steerpid/ki", pid_steering_.getKi());
+    if (new_steerpid_ki != pid_steering_.getKi()) {
+        ESP_LOGI(TAG, "Steering PID Ki changed: %f -> %f",
+                 pid_steering_.getKi(),
+                 new_steerpid_ki);
+        pid_steering_.setKi(new_steerpid_ki);
+    }
+
+    float new_steerpid_kd = ConfigManager::instance().getFloat("steerpid/kd", pid_steering_.getKd());
+    if (new_steerpid_kd != pid_steering_.getKd()) {
+        ESP_LOGI(TAG, "Steering PID Kd changed: %f -> %f",
+                 pid_steering_.getKd(),
+                 new_steerpid_kd);
+        pid_steering_.setKd(new_steerpid_kd);
+    }
+
+    float new_steerpid_antiwu = ConfigManager::instance().getFloat("steerpid/antiwu", pid_steering_.getAntiWindupLimit());
+    if (new_steerpid_antiwu != pid_steering_.getAntiWindupLimit()) {
+        ESP_LOGI(TAG, "Steering PID Anti-Windup changed: %f -> %f",
+                 pid_steering_.getAntiWindupLimit(),
+                 new_steerpid_antiwu);
+        pid_steering_.setAntiWindupLimit(new_steerpid_antiwu);
+    }
+
+    float new_gyro_deadband = ConfigManager::instance().getFloat("vdc/deadband", gyro_deadband_);
+    if (new_gyro_deadband != gyro_deadband_) {
+        ESP_LOGI(TAG, "Gyro deadband changed: %f -> %f",
+                 gyro_deadband_,
+                 new_gyro_deadband);
+        gyro_deadband_ = new_gyro_deadband;
+    }
+
+    float new_motorpid_kp = ConfigManager::instance().getFloat("motorpid/kp", pid_motor_fl_.getKp());
+    if (new_motorpid_kp != pid_motor_fl_.getKp()) {
+        ESP_LOGI(TAG, "Motor PID Kp changed: %f -> %f",
+                 pid_motor_fl_.getKp(),
+                 new_motorpid_kp);
+        pid_motor_fl_.setKp(new_motorpid_kp);
+        pid_motor_fr_.setKp(new_motorpid_kp);
+        pid_motor_rl_.setKp(new_motorpid_kp);
+        pid_motor_rr_.setKp(new_motorpid_kp);
+    }
+    float new_motorpid_ki = ConfigManager::instance().getFloat("motorpid/ki", pid_motor_fl_.getKi());
+    if (new_motorpid_ki != pid_motor_fl_.getKi()) {
+        ESP_LOGI(TAG, "Motor PID Ki changed: %f -> %f",
+                 pid_motor_fl_.getKi(),
+                 new_motorpid_ki);
+        pid_motor_fl_.setKi(new_motorpid_ki);
+        pid_motor_fr_.setKi(new_motorpid_ki);
+        pid_motor_rl_.setKi(new_motorpid_ki);
+        pid_motor_rr_.setKi(new_motorpid_ki);
+    }
+
+    float new_motorpid_kd = ConfigManager::instance().getFloat("motorpid/kd", pid_motor_fl_.getKd());
+    if (new_motorpid_kd != pid_motor_fl_.getKd()) {
+        ESP_LOGI(TAG, "Motor PID Kd changed: %f -> %f",
+                 pid_motor_fl_.getKd(),
+                 new_motorpid_kd);
+        pid_motor_fl_.setKd(new_motorpid_kd);
+        pid_motor_fr_.setKd(new_motorpid_kd);
+        pid_motor_rl_.setKd(new_motorpid_kd);
+        pid_motor_rr_.setKd(new_motorpid_kd);
+    }
+
+    float new_motorpid_antiwu = ConfigManager::instance().getFloat("motorpid/antiwu", pid_motor_fl_.getAntiWindupLimit());
+    if (new_motorpid_antiwu != pid_motor_fl_.getAntiWindupLimit()) {
+        ESP_LOGI(TAG, "Motor PID Anti-Windup changed: %f -> %f",
+                 pid_motor_fl_.getAntiWindupLimit(),
+                 new_motorpid_antiwu);
+        pid_motor_fl_.setAntiWindupLimit(new_motorpid_antiwu);
+        pid_motor_fr_.setAntiWindupLimit(new_motorpid_antiwu);
+        pid_motor_rl_.setAntiWindupLimit(new_motorpid_antiwu);
+        pid_motor_rr_.setAntiWindupLimit(new_motorpid_antiwu);
+    }
+
+    bool new_log_erp = ConfigManager::instance().getBool("vdc/logerpm", log_erp_);
     if (new_log_erp != log_erp_) {
         ESP_LOGI(TAG, "Log eRPM changed: %s -> %s",
                  log_erp_ ? "true" : "false",
@@ -134,31 +211,12 @@ void VehicleDynamicsController::updateFromConfig() {
         log_erp_ = new_log_erp;
     }
 
-    // float new_rate_p_gain = ConfigManager::instance().getFloat("vdc/kp", rate_p_gain_);
-    // if (new_rate_p_gain != rate_p_gain_) {
-    //     ESP_LOGI(TAG, "Rate P gain changed: %.2f -> %.2f", rate_p_gain_, new_rate_p_gain);
-    //     rate_p_gain_ = new_rate_p_gain;
-    // }
-    // float new_rate_i_gain_ = ConfigManager::instance().getFloat("vdc/ki", rate_i_gain_);
-    // if (new_rate_i_gain_ != rate_i_gain_) {
-    //     ESP_LOGI(TAG, "Rate I gain changed: %.2f -> %.2f", rate_i_gain_, new_rate_i_gain_);
-    //     rate_i_gain_ = new_rate_i_gain_;
-    // }
-    // float new_rate_d_gain_ = ConfigManager::instance().getFloat("vdc/kd", rate_d_gain_);
-    // if (new_rate_d_gain_ != rate_d_gain_) {
-    //     ESP_LOGI(TAG, "Rate D gain changed: %.2f -> %.2f", rate_d_gain_, new_rate_d_gain_);
-    //     rate_d_gain_ = new_rate_d_gain_;
-    // }
-    // float new_anti_windup_limit_ = ConfigManager::instance().getFloat("vdc/anti_windup", anti_windup_limit_);
-    // if (new_anti_windup_limit_ != anti_windup_limit_) {
-    //     ESP_LOGI(TAG, "Anti-windup limit changed: %.2f -> %.2f", anti_windup_limit_, new_anti_windup_limit_);
-    //     anti_windup_limit_ = new_anti_windup_limit_;
-    // }
-    // float new_max_turn_rate_ = ConfigManager::instance().getFloat("vdc/turnrate", max_turn_rate_);
-    // if (new_max_turn_rate_ != max_turn_rate_ && new_max_turn_rate_ > 0.0f && new_max_turn_rate_ < 180.0f) {
-    //     ESP_LOGI(TAG, "Max turn rate changed: %.2f -> %.2f", max_turn_rate_, new_max_turn_rate_);
-    //     max_turn_rate_ = new_max_turn_rate_;
-    // }
+    float new_turnrate = ConfigManager::instance().getFloat("vdc/turnrate", max_turn_rate_);
+    if (new_turnrate != max_turn_rate_) {
+        ESP_LOGI(TAG, "Turnrate scale changed %f -> %f",
+            max_turn_rate_, new_turnrate);
+        max_turn_rate_ = new_turnrate;
+    }
 }
 
 void VehicleDynamicsController::steeringTask(void* arg) {
@@ -169,7 +227,7 @@ void VehicleDynamicsController::steeringTask(void* arg) {
     const VehicleData& vehicle_data = VehicleData::instance();
     constexpr auto ch_steering = static_cast<size_t>(sensor::SbusChannel::STEERING);
     while (true) {
-                const sensor::SbusData& sbus_data = vehicle_data.getSbus();
+        const sensor::SbusData& sbus_data = vehicle_data.getSbus();
         const sensor::ImuData& imu_data = vehicle_data.getImu();
         const sensor::channel_t steering_value = sbus_data.channels_scaled[ch_steering];
 
@@ -181,17 +239,13 @@ void VehicleDynamicsController::steeringTask(void* arg) {
 
         if (controller->bypass_pid_) {
             controller->steering_servo_.setPosition(steering_value);
-            vTaskDelay(pdMS_TO_TICKS(10));
+            vTaskDelay(pdMS_TO_TICKS(controller->config_.task_period));
             continue;
         }
-        // if (!imu_data.quality.valid_data) {
-        //     controller->steering_servo_.setPosition(sensor::Servo::FAILSAFE_POSITION);
-        //     vTaskDelay(pdMS_TO_TICKS(10));
-        //     continue;
-        // }
+        // TODO: CHeck for valid gyro data
 
         const float desired_rate = controller->max_turn_rate_ * (static_cast<float>(steering_value)-1000.0f) / 1000.0f;
-        float current_rate = imu_data.gyro_z * sensor::ImuData::GYRO_TO_DPS;
+        const float current_rate = imu_data.gyro_z * sensor::ImuData::GYRO_TO_DPS;
 
         float error = desired_rate - current_rate;
 
@@ -208,6 +262,8 @@ void VehicleDynamicsController::steeringTask(void* arg) {
         controller->steering_servo_.setPosition(output);
 
         // TODO: implement fixed frequency stuff
+
+        vTaskDelay(pdMS_TO_TICKS(controller->config_.task_period));
     }
 }
 
@@ -223,58 +279,101 @@ void VehicleDynamicsController::motorTask(void* arg) {
         const sensor::channel_t throttle_value = sbus_data.channels_scaled[ch_throttle];
 
 
-        uint16_t dshot_value = std::ranges::clamp(throttle_value + 48, 48, 2047);
+        const uint16_t dshot_value = std::ranges::clamp(throttle_value + 48, 48, 2047);
 
         if (!controller->armed_) {
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
 
-        if (throttle_value < 100) {
+        controller->motor_fl_.sendThrottle(dshot_value);
+        controller->motor_fr_.sendThrottle(dshot_value);
+        controller->motor_rl_.sendThrottle(dshot_value);
+        controller->motor_rr_.sendThrottle(dshot_value);
+
+        vTaskDelay(pdMS_TO_TICKS(controller->config_.task_period));
+
+        continue;
+
+        // NOTE: i realized there is a fundamental logic error in this setup so i dont think we can do it like this.
+
+        if (throttle_value < 100 || controller->bypass_pid_) {
             controller->motor_fl_.sendThrottle(dshot_value);
             controller->motor_fr_.sendThrottle(dshot_value);
             controller->motor_rl_.sendThrottle(dshot_value);
             controller->motor_rr_.sendThrottle(dshot_value);
 
-            vTaskDelay(pdMS_TO_TICKS(5));
+            vTaskDelay(pdMS_TO_TICKS(controller->config_.task_period));
             continue;
         }
 
-        static int count = 0;
-        if (controller->log_erp_ && count++ % 100 == 0) {
-            ESP_LOGI(TAG, "ERPM: FL: %05lu, FR: %05lu, RL: %05lu, RR: %05lu, Target: %05lu",
-                     erpm_data.front_left.erpm,
-                     erpm_data.front_right.erpm,
-                     erpm_data.rear_left.erpm,
-                     erpm_data.rear_right.erpm,
-                     throttle_value * controller->throttle_to_rpm_throttle_);
+        int32_t error_fl{0};
+        int32_t error_fr{0};
+        int32_t error_rl{0};
+        int32_t error_rr{0};
+
+
+        if (erpm_data.front_left.erpm != 0 && erpm_data.front_left.erpm != 65535) {
+            error_fl = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.front_left.erpm;
+            // int32_t output_fl =  dshot_value + controller->pid_motor_fl_.update(error_fl);
+            // controller->motor_fl_.sendThrottle(output_fl);
+            controller->motor_fl_.sendThrottle(dshot_value);
+        } else {
+            controller->motor_fl_.sendThrottle(dshot_value);
         }
 
-        int32_t error_fl = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.front_left.erpm;
-        int32_t output_fl =  dshot_value + controller->pid_motor_fl_.update(error_fl);
-        controller->motor_fl_.sendThrottle(output_fl);
+        if (erpm_data.front_right.erpm != 0 && erpm_data.front_right.erpm != 65535) {
+            error_fr = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.front_right.erpm;
+            // int32_t output_fr = dshot_value + controller->pid_motor_fr_.update(error_fr);
+            // controller->motor_fr_.sendThrottle(output_fr);
+            controller->motor_fr_.sendThrottle(dshot_value);
+        } else {
+            controller->motor_fr_.sendThrottle(dshot_value);
+        }
 
-        int32_t error_fr = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.front_right.erpm;
-        int32_t output_fr = dshot_value + controller->pid_motor_fr_.update(error_fr);
-        controller->motor_fr_.sendThrottle(output_fr);
+        if (erpm_data.rear_left.erpm != 0 && erpm_data.rear_left.erpm != 65535) {
+            error_rl = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.rear_left.erpm;
+            // int32_t output_rl = dshot_value + controller->pid_motor_rl_.update(error_rl);
+            // controller->motor_rl_.sendThrottle(output_rl);
+            controller->motor_rl_.sendThrottle(dshot_value);
+        } else {
+            controller->motor_rl_.sendThrottle(dshot_value);
+        }
 
-        int32_t error_rl = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.rear_left.erpm;
-        int32_t output_rl = dshot_value + controller->pid_motor_rl_.update(error_rl);
-        controller->motor_rl_.sendThrottle(output_rl);
-
-        int32_t error_rr = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.rear_right.erpm;
-        int32_t output_rr = dshot_value + controller->pid_motor_rr_.update(error_rr);
-        controller->motor_rr_.sendThrottle(output_rr);
+        if (erpm_data.rear_right.erpm != 0 && erpm_data.rear_right.erpm != 65535) {
+            error_rr = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.rear_right.erpm;
+            // int32_t output_rr = dshot_value + static_cast<int32_t>(controller->pid_motor_rr_.update(error_rr));
+            // controller->motor_rr_.sendThrottle(output_rr);
+            controller->motor_rr_.sendThrottle(dshot_value);
+        } else {
+            controller->motor_rr_.sendThrottle(dshot_value);
+        }
 
         controller->updateRPMTelemetry(throttle_value);
 
-        vTaskDelay(pdMS_TO_TICKS(5));
+        static int count = 0;
+        if (controller->log_erp_ && count++ % 100 == 0) {
+            ESP_LOGI(TAG, "ERPM: %05lu %05lu %05lu %05lu (%05lu) | ePID offset on (%05u): %05f %05f %05f %05f",
+                     erpm_data.front_right.erpm,
+                     erpm_data.front_left.erpm,
+                     erpm_data.rear_left.erpm,
+                     erpm_data.rear_right.erpm,
+                     throttle_value * controller->throttle_to_rpm_throttle_,
+                        dshot_value,
+                        controller->pid_motor_rr_.update(error_fr),
+                        controller->pid_motor_rr_.update(error_fl),
+                        controller->pid_motor_rr_.update(error_rl),
+                        controller->pid_motor_rr_.update(error_rr)
+                     );
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(controller->config_.task_period));
     }
 
 }
 
 
-void VehicleDynamicsController::controllerTask(void* arg) {
+[[noreturn]] void VehicleDynamicsController::controllerTask(void* arg) {
     auto* controller = static_cast<VehicleDynamicsController*>(arg);
     TickType_t last_wake_time = xTaskGetTickCount();
 
@@ -283,15 +382,13 @@ void VehicleDynamicsController::controllerTask(void* arg) {
     constexpr auto ch_throttle = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
     // constexpr auto ch_steering = static_cast<size_t>(sensor::SbusChannel::STEERING);
     constexpr auto ch_arm = static_cast<size_t>(sensor::SbusChannel::AUX1);
-    constexpr auto ch_pidbypass = static_cast<size_t>(sensor::SbusChannel::AUX2);
+    constexpr auto ch_pid_bypass = static_cast<size_t>(sensor::SbusChannel::AUX2);
     constexpr auto ch_steering_kp = static_cast<size_t>(sensor::SbusChannel::AUX3);
     constexpr auto ch_steering_ki = static_cast<size_t>(sensor::SbusChannel::AUX4);
     constexpr auto ch_steering_kd = static_cast<size_t>(sensor::SbusChannel::AUX5);
 
     while (true) {
         const sensor::SbusData& sbus_data = vehicle_data.getSbus();
-        // const sensor::ImuData& imu_data = vehicle_data.getImu();
-        const sensor::eRPMData& erpm_data = vehicle_data.getErpm();
 
         if (!sbus_data.quality.valid_signal) {
             if (!controller->failsafe_) {
@@ -301,12 +398,13 @@ void VehicleDynamicsController::controllerTask(void* arg) {
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
+        controller->failsafe_ = false;
 
-        if (sbus_data.channels_scaled[ch_pidbypass] > 1900 && !controller->bypass_pid_) {
+        if (sbus_data.channels_scaled[ch_pid_bypass] > 1900 && !controller->bypass_pid_) {
             controller->bypass_pid_ = true;
             ESP_LOGI(TAG, "Bypassing PID");
         }
-        else if (sbus_data.channels_scaled[ch_pidbypass] < 1900 && controller->bypass_pid_) {
+        else if (sbus_data.channels_scaled[ch_pid_bypass] < 1900 && controller->bypass_pid_) {
             controller->bypass_pid_ = false;
             ESP_LOGI(TAG, "Resuming PID");
         }
@@ -322,7 +420,6 @@ void VehicleDynamicsController::controllerTask(void* arg) {
         }
 
         if (sbus_data.channels_scaled[ch_steering_kp] < 500) {
-            // TODO: implement this
             controller->pid_steering_.setKp(controller->pid_steering_.getKp() - 0.1f);
             ESP_LOGI(TAG, "KP: %f", controller->pid_steering_.getKp());
             vTaskDelay(pdMS_TO_TICKS(100));
