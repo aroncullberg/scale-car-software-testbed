@@ -50,9 +50,9 @@ public:
 private:
     static constexpr auto TAG = "VehicleDynamics";
 
-    static void controllerTask(void* arg);
-    static void steeringTask(void* arg);
-    static void motorTask(void* arg);
+    [[noreturn]] static void controllerTask(void* arg);
+    [[noreturn]] static void steeringTask(void* arg);
+    [[noreturn]] static void motorTask(void* arg);
 
     esp_err_t updateThrottle(sensor::channel_t throttle_value);
 
@@ -71,7 +71,6 @@ private:
     DShotRMT motor_rl_; // Rear left
     DShotRMT motor_rr_; // Rear right
 
-
     PIDController pid_steering_;
     PIDController pid_motor_fr_;
     PIDController pid_motor_fl_;
@@ -87,9 +86,7 @@ private:
     float gyro_deadband_{0.1f};
 
     bool log_erp_{false};
-    bool erp_verbose{true};
     bool is_running_{false};
-    bool bidirectional_{false};
     bool bypass_pid_{false};
     bool failsafe_{true};
     bool armed_{false};
