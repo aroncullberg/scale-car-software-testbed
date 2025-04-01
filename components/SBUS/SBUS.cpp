@@ -120,6 +120,7 @@ void SBUS::sbusTask(void* parameters) {
     constexpr uint8_t end_byte = 0x00;
     uint8_t byte;
     TickType_t last_frame_time = xTaskGetTickCount();
+    TickType_t last_wake_time = xTaskGetTickCount();
 
     ESP_LOGI(TAG, "sbus task started");
 
@@ -159,7 +160,18 @@ void SBUS::sbusTask(void* parameters) {
             
             instance->buffer_index_ = 0;
         }
-        // vTaskDelay(pdMS_TO_TICKS(5)); // Prevent task starvation
+
+        // NOTE: debugging should place this all of the codebase t
+        // TickType_t now = xTaskGetTickCount();
+        // TickType_t delta_ticks = now - last_wake_time;
+        //
+        // // Avoid divide-by-zero
+        // if (delta_ticks > 0) {
+        //     uint32_t freq_hz = 1000 / delta_ticks;
+        //     ESP_LOGI(TAG, "Frequency: %u Hz", freq_hz);
+        // }
+
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / instance->config_t.frequency + 500) / 1000));
     }
 }
 

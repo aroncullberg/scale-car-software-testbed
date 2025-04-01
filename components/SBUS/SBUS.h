@@ -22,6 +22,8 @@ class SBUS {
         gpio_num_t uart_tx_pin{GPIO_NUM_NC};
         gpio_num_t uart_rx_pin{GPIO_NUM_NC};
         int baud_rate{100000}; // NOTE: This value needs to be doublechecked against sbus standard baud rate, but it works so...
+
+        uint16_t frequency{30};
     };
 
     explicit SBUS(const Config& config);
