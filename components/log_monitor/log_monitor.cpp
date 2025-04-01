@@ -3,6 +3,9 @@
 //
 
 #include "log_monitor.h"
+
+#include <algorithm>
+
 #include  "esp_log.h"
 #include "esp_wifi.h"
 #include "nvs_flash.h"
@@ -15,7 +18,7 @@
 #include <cstring>
 
 
-static const char* TAG = "LogMonitor";
+static const char *TAG = "LogMonitor";
 
 // To keep a kopy of original vprintf function
 static vprintf_like_t original_vprintf_fn = nullptr;
@@ -33,12 +36,12 @@ int log_monitor_vprintf(const char *format, va_list args) {
     return result;
 }
 
-LogMonitor& LogMonitor::instance() {
+LogMonitor &LogMonitor::instance() {
     static LogMonitor instance;
     return instance;
 }
 
-esp_err_t LogMonitor::init(const Config& config) {
+esp_err_t LogMonitor::init(const Config &config) {
     if (is_running_) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -112,7 +115,7 @@ esp_err_t LogMonitor::stop() {
         log_server_socket_ = -1;
     }
 
-    for (const auto& [client, is_config] : client_sockets_) {
+    for (const auto &[client, is_config]: client_sockets_) {
         if (client >= 0) {
             close(client);
         }
@@ -133,7 +136,7 @@ esp_err_t LogMonitor::stop() {
     return ESP_OK;
 }
 
-void LogMonitor::queueLogMessage(const char* message) {
+void LogMonitor::queueLogMessage(const char *message) {
     if (!is_running_ || !log_queue_) return;
 
     xQueueSendToBack(log_queue_, message, 0);
@@ -157,7 +160,7 @@ esp_err_t LogMonitor::setupWiFi() {
 
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    esp_netif_t* ap_netif = esp_netif_create_default_wifi_ap();
+    esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -189,8 +192,8 @@ esp_err_t LogMonitor::setupWiFi() {
     return ESP_OK;
 }
 
-void LogMonitor::serverTask(void* args) {
-    LogMonitor* self = static_cast<LogMonitor*>(args);
+void LogMonitor::serverTask(void *args) {
+    LogMonitor *self = static_cast<LogMonitor *>(args);
     char log_buffer[512];
     char cmd_buffer[256];
     std::map<int, std::string> command_buffers;
@@ -230,7 +233,7 @@ void LogMonitor::serverTask(void* args) {
     config_addr.sin_port = htons(self->config_.config_port);
     config_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(config_server, (struct sockaddr *)&config_addr, sizeof(config_addr)) < 0) {
+    if (bind(config_server, (struct sockaddr *) &config_addr, sizeof(config_addr)) < 0) {
         ESP_LOGE(TAG, "Failed to bind config socket: %d", errno);
         close(config_server);
         close(log_server);
@@ -244,7 +247,7 @@ void LogMonitor::serverTask(void* args) {
     log_addr.sin_port = htons(self->config_.log_port);
     log_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(log_server, (struct sockaddr *)&log_addr, sizeof(log_addr)) < 0) {
+    if (bind(log_server, (struct sockaddr *) &log_addr, sizeof(log_addr)) < 0) {
         ESP_LOGE(TAG, "Failed to bind log socket: %d", errno);
         close(config_server);
         close(log_server);
@@ -288,14 +291,15 @@ void LogMonitor::serverTask(void* args) {
         FD_SET(log_server, &read_set);
 
         // Add all clients to the sets
-        for (const auto& [client, is_config] : self->client_sockets_) {
+        for (const auto &[client, is_config]: self->client_sockets_) {
             FD_SET(client, &read_set);
             FD_SET(client, &error_set);
             max_fd = std::max(max_fd, client);
         }
 
         select_timeout.tv_sec = 0;
-        select_timeout.tv_usec = 250000;  // 250ms = 250,000 μs (how to type μ on keyboard? annoying to have to google mu everytime i want it)
+        select_timeout.tv_usec = 250000;
+        // 250ms = 250,000 μs (how to type μ on keyboard? annoying to have to google mu everytime i want it)
 
         int activity = select(max_fd + 1, &read_set, NULL, &error_set, &select_timeout);
 
@@ -309,7 +313,7 @@ void LogMonitor::serverTask(void* args) {
         if (FD_ISSET(config_server, &read_set)) {
             struct sockaddr_in client_addr;
             socklen_t addr_len = sizeof(client_addr);
-            int new_client = accept(config_server, (struct sockaddr*)&client_addr, &addr_len);
+            int new_client = accept(config_server, (struct sockaddr *) &client_addr, &addr_len);
 
             if (new_client >= 0) {
                 int flag = 1;
@@ -319,7 +323,7 @@ void LogMonitor::serverTask(void* args) {
                 command_buffers[new_client] = "";
                 ESP_LOGI(TAG, "New config client connected: %d", new_client);
 
-                const char* welcome = "=== ESP32-S3 RC Car Configuration ===\r\n";
+                const char *welcome = "=== ESP32-S3 RC Car Configuration ===\r\n";
                 send(new_client, welcome, strlen(welcome), 0);
                 send(new_client, "Type 'help' for available commands.\r\n\n", 41, 0);
             } else {
@@ -331,7 +335,7 @@ void LogMonitor::serverTask(void* args) {
         if (FD_ISSET(log_server, &read_set)) {
             struct sockaddr_in client_addr;
             socklen_t addr_len = sizeof(client_addr);
-            int new_client = accept(log_server, (struct sockaddr*)&client_addr, &addr_len);
+            int new_client = accept(log_server, (struct sockaddr *) &client_addr, &addr_len);
 
             if (new_client >= 0) {
                 int flag = 1;
@@ -340,7 +344,7 @@ void LogMonitor::serverTask(void* args) {
                 self->client_sockets_[new_client] = false; // Mark as log client
                 ESP_LOGI(TAG, "New log client connected: %d", new_client);
 
-                const char* welcome = "=== ESP32-S3 RC Car Log Stream ===\r\n";
+                const char *welcome = "=== ESP32-S3 RC Car Log Stream ===\r\n";
                 send(new_client, welcome, strlen(welcome), 0);
                 send(new_client, "Log stream started. Commands are disabled on this port.\r\n", 56, 0);
             } else {
@@ -416,7 +420,8 @@ void LogMonitor::serverTask(void* args) {
                     int client = it->first;
                     bool is_config = it->second;
 
-                    if (!is_config) { // Only send logs to log clients
+                    if (!is_config) {
+                        // Only send logs to log clients
                         int result = send(client, log_buffer, strlen(log_buffer), 0);
                         if (result < 0) {
                             ESP_LOGI(TAG, "Log client disconnected during send: %d", client);
@@ -429,7 +434,7 @@ void LogMonitor::serverTask(void* args) {
                     ++it;
                 }
             } else {
-                more_messages = false;  // Queue empty
+                more_messages = false; // Queue empty
             }
         }
 
@@ -440,7 +445,7 @@ void LogMonitor::serverTask(void* args) {
 }
 
 
-void LogMonitor::processCommand(const char* command_line, int client_socket) {
+void LogMonitor::processCommand(const char *command_line, int client_socket) {
     char cmd[16] = {0};
     char module[32] = {0};
     char setting[32] = {0};
@@ -451,11 +456,9 @@ void LogMonitor::processCommand(const char* command_line, int client_socket) {
     if (args >= 1) {
         if (strcmp(cmd, "get") == 0 && args >= 3) {
             handleGetCommand(module, setting, client_socket);
-        }
-        else if (strcmp(cmd, "set") == 0 && args >= 4) {
+        } else if (strcmp(cmd, "set") == 0 && args >= 4) {
             handleSetCommand(module, setting, value, client_socket);
-        }
-        else if (strcmp(cmd, "save") == 0) {
+        } else if (strcmp(cmd, "save") == 0) {
             esp_err_t err = ConfigManager::instance().commit();
             if (err == ESP_OK) {
                 sendResponse("Configuration saved successfully", client_socket);
@@ -464,8 +467,7 @@ void LogMonitor::processCommand(const char* command_line, int client_socket) {
                 snprintf(error_msg, sizeof(error_msg), "Error saving configuration: %d", err);
                 sendResponse(error_msg, client_socket);
             }
-        }
-        else if (strcmp(cmd, "remove") == 0 && args >= 3) {
+        } else if (strcmp(cmd, "remove") == 0 && args >= 3) {
             std::string key = std::string(module) + "/" + setting;
             esp_err_t err = ConfigManager::instance().removeKey(key.c_str());
             if (err == ESP_OK) {
@@ -488,32 +490,28 @@ void LogMonitor::processCommand(const char* command_line, int client_socket) {
                 snprintf(error_msg, sizeof(error_msg), "Error discarding changes: %d", err);
                 sendResponse(error_msg, client_socket);
             }
-        }
-        else if (strcmp(cmd, "reboot") == 0) {
+        } else if (strcmp(cmd, "reboot") == 0) {
             sendResponse("Rebooting system...", client_socket);
             vTaskDelay(pdMS_TO_TICKS(500));
             esp_restart();
-        }
-        else if (strcmp(cmd, "help") == 0) {
+        } else if (strcmp(cmd, "help") == 0) {
             handleHelpCommand(client_socket);
-        }
-        else if (strcmp(cmd, "list") == 0 && args >= 2) {
+        } else if (strcmp(cmd, "list") == 0 && args >= 2) {
             handleListCommand(module, client_socket);
-        }
-        else {
+        } else {
             sendResponse("Unknown command. Type 'help' for available commands.", client_socket);
         }
     }
 }
 
-void LogMonitor::sendResponse(const char* response, int client_socket) {
+void LogMonitor::sendResponse(const char *response, int client_socket) {
     if (client_socket >= 0) {
         send(client_socket, response, strlen(response), 0);
         send(client_socket, "\r\n", 2, 0);
     }
 }
 
-void LogMonitor::handleGetCommand(const char* module, const char* setting, int client_socket) {
+void LogMonitor::handleGetCommand(const char *module, const char *setting, int client_socket) {
     std::string key = std::string(module) + "/" + setting;
 
     // ESP_LOGI(TAG, "Getting value for %s", key.c_str());
@@ -538,38 +536,38 @@ void LogMonitor::handleGetCommand(const char* module, const char* setting, int c
     switch (type) {
         case ConfigManager::ValueType::BOOL:
             snprintf(response, sizeof(response), "%s/%s = %s",
-                    module, setting,
-                    ConfigManager::instance().getBool(key.c_str()) ? "true" : "false");
+                     module, setting,
+                     ConfigManager::instance().getBool(key.c_str()) ? "true" : "false");
             break;
 
         case ConfigManager::ValueType::INT:
             snprintf(response, sizeof(response), "%s/%s = %ld",
-                    module, setting,
-                    ConfigManager::instance().getInt(key.c_str()));
+                     module, setting,
+                     ConfigManager::instance().getInt(key.c_str()));
             break;
 
         case ConfigManager::ValueType::FLOAT:
             snprintf(response, sizeof(response), "%s/%s = %.2f",
-                    module, setting,
-                    ConfigManager::instance().getFloat(key.c_str()));
+                     module, setting,
+                     ConfigManager::instance().getFloat(key.c_str()));
             break;
 
         case ConfigManager::ValueType::STRING:
             snprintf(response, sizeof(response), "%s/%s = \"%s\"",
-                    module, setting,
-                    ConfigManager::instance().getString(key.c_str()).c_str());
+                     module, setting,
+                     ConfigManager::instance().getString(key.c_str()).c_str());
             break;
 
         default:
             snprintf(response, sizeof(response), "Error: Cannot determine type of '%s/%s'",
-                    module, setting);
+                     module, setting);
             break;
     }
 
     sendResponse(response, client_socket);
 }
 
-void LogMonitor::handleSetCommand(const char* module, const char* setting, const char* value, int client_socket) {
+void LogMonitor::handleSetCommand(const char *module, const char *setting, const char *value, int client_socket) {
     std::string key = std::string(module) + "/" + setting;
     esp_err_t err = ESP_OK;
 
@@ -578,8 +576,7 @@ void LogMonitor::handleSetCommand(const char* module, const char* setting, const
         // Boolean value
         bool bool_value = (strcmp(value, "true") == 0);
         err = ConfigManager::instance().setBool(key.c_str(), bool_value);
-    }
-    else if (strchr(value, '.') != nullptr) {
+    } else if (strchr(value, '.') != nullptr) {
         // Likely a float if it contains a decimal point
         float float_value;
         if (sscanf(value, "%f", &float_value) == 1) {
@@ -587,13 +584,11 @@ void LogMonitor::handleSetCommand(const char* module, const char* setting, const
         } else {
             err = ESP_ERR_INVALID_ARG;
         }
-    }
-    else if (value[0] == '"' && value[strlen(value)-1] == '"') {
+    } else if (value[0] == '"' && value[strlen(value) - 1] == '"') {
         // String value (quoted)
-        std::string string_value(value + 1, strlen(value) - 2);  // Remove quotes
+        std::string string_value(value + 1, strlen(value) - 2); // Remove quotes
         err = ConfigManager::instance().setString(key.c_str(), string_value);
-    }
-    else {
+    } else {
         // Try to parse as integer
         int int_value;
         if (sscanf(value, "%d", &int_value) == 1) {
@@ -636,7 +631,7 @@ void LogMonitor::handleHelpCommand(int client_socket) {
     sendResponse("  log     - Logging settings", client_socket);
 }
 
-void LogMonitor::handleListCommand(const char* module, int client_socket) {
+void LogMonitor::handleListCommand(const char *module, int client_socket) {
     std::string prefix;
     if (strcmp(module, "*") != 0) {
         // If not wildcard, use as prefix
@@ -650,52 +645,70 @@ void LogMonitor::handleListCommand(const char* module, int client_socket) {
     if (keys.empty()) {
         char response[128];
         snprintf(response, sizeof(response), "No settings found for '%s'",
-                prefix.empty() ? "any module" : module);
+                 prefix.empty() ? "any module" : module);
         sendResponse(response, client_socket);
         return;
     }
 
-    // Display the keys with their types and values
-    char intro[128];
-    snprintf(intro, sizeof(intro), "Settings for %s:",
-            prefix.empty() ? "all modules" : module);
-    sendResponse(intro, client_socket);
+    // Group keys by module prefix (the part before '/')
+    std::map<std::string, std::vector<std::string> > grouped;
+    for (const auto &key: keys) {
+        size_t pos = key.find('/');
+        std::string group = (pos != std::string::npos) ? key.substr(0, pos) : key;
+        grouped[group].push_back(key);
+    }
 
-    for (const auto& key : keys) {
-        ConfigManager::ValueType type = ConfigManager::instance().getValueType(key.c_str());
-        char value_str[256];
+    // Iterate over each module group in sorted order.
+    for (const auto &groupPair: grouped) {
+        std::string header = "Settings for " + groupPair.first + ":";
+        sendResponse(header.c_str(), client_socket);
 
-        switch (type) {
-            case ConfigManager::ValueType::BOOL:
-                snprintf(value_str, sizeof(value_str), "  %s = %s [bool]",
-                    key.c_str(),
-                    ConfigManager::instance().getBool(key.c_str()) ? "true" : "false");
-                break;
+        // Optionally, sort the keys within each group.
+        auto settings = groupPair.second;
+        std::sort(settings.begin(), settings.end());
 
-            case ConfigManager::ValueType::INT:
-                snprintf(value_str, sizeof(value_str), "  %s = %ld [int]",
-                    key.c_str(),
-                    ConfigManager::instance().getInt(key.c_str()));
-                break;
+        // Process each key within the group.
+        for (const auto &key: settings) {
+            ConfigManager::ValueType type = ConfigManager::instance().getValueType(key.c_str());
+            char valueStr[128] = {0};
+            const char *typeStr = "";
+            switch (type) {
+                case ConfigManager::ValueType::BOOL: {
+                    bool b = ConfigManager::instance().getBool(key.c_str());
+                    snprintf(valueStr, sizeof(valueStr), "%s = %s", key.c_str(), b ? "true" : "false");
+                    typeStr = "[bool]";
+                    break;
+                }
+                case ConfigManager::ValueType::INT: {
+                    int32_t i = ConfigManager::instance().getInt(key.c_str());
+                    snprintf(valueStr, sizeof(valueStr), "%s = %ld", key.c_str(), i);
+                    typeStr = "[int]";
+                    break;
+                }
+                case ConfigManager::ValueType::FLOAT: {
+                    float f = ConfigManager::instance().getFloat(key.c_str());
+                    snprintf(valueStr, sizeof(valueStr), "%s = %.2f", key.c_str(), f);
+                    typeStr = "[float]";
+                    break;
+                }
+                case ConfigManager::ValueType::STRING: {
+                    std::string s = ConfigManager::instance().getString(key.c_str());
+                    snprintf(valueStr, sizeof(valueStr), "%s = \"%s\"", key.c_str(), s.c_str());
+                    typeStr = "[string]";
+                    break;
+                }
+                default:
+                    snprintf(valueStr, sizeof(valueStr), "%s = <unknown type>", key.c_str());
+                    typeStr = "";
+                    break;
+            }
 
-            case ConfigManager::ValueType::FLOAT:
-                snprintf(value_str, sizeof(value_str), "  %s = %.2f [float]",
-                    key.c_str(),
-                    ConfigManager::instance().getFloat(key.c_str()));
-                break;
-
-            case ConfigManager::ValueType::STRING:
-                snprintf(value_str, sizeof(value_str), "  %s = \"%s\" [string]",
-                    key.c_str(),
-                    ConfigManager::instance().getString(key.c_str()).c_str());
-                break;
-
-            default:
-                snprintf(value_str, sizeof(value_str), "  %s = <unknown type>",
-                    key.c_str());
-                break;
+            // Align the type string to a fixed column (e.g., column 40)
+            char lineBuffer[160] = {0};
+            snprintf(lineBuffer, sizeof(lineBuffer), "  %-40s%s", valueStr, typeStr);
+            sendResponse(lineBuffer, client_socket);
         }
-
-        sendResponse(value_str, client_socket);
+        // Add an empty line between groups
+        sendResponse("", client_socket);
     }
 }

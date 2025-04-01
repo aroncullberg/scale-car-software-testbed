@@ -29,10 +29,10 @@ public:
 
         uint16_t steering_pid_hz{60};
 
+        uint16_t frequency{30};
 
         uint32_t task_stack_size{4096};
         uint8_t task_priority{5};
-        TickType_t task_period{pdMS_TO_TICKS(20)}; // 50Hz default
     };
 
     explicit VehicleDynamicsController(const Config& config);

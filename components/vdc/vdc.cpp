@@ -221,6 +221,7 @@ void VehicleDynamicsController::updateFromConfig() {
 
 void VehicleDynamicsController::steeringTask(void* arg) {
     auto* controller = static_cast<VehicleDynamicsController*>(arg);
+    TickType_t last_wake_time = xTaskGetTickCount();
 
     controller->pid_steering_.enablePID();
 
@@ -233,13 +234,13 @@ void VehicleDynamicsController::steeringTask(void* arg) {
 
         if (controller->failsafe_) {
             controller->steering_servo_.setPosition(sensor::Servo::FAILSAFE_POSITION);
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / controller->config_.frequency + 500) / 1000));
             continue;
         }
 
         if (controller->bypass_pid_) {
             controller->steering_servo_.setPosition(steering_value);
-            vTaskDelay(pdMS_TO_TICKS(controller->config_.task_period));
+            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / controller->config_.frequency + 500) / 1000));
             continue;
         }
         // TODO: CHeck for valid gyro data
@@ -263,12 +264,14 @@ void VehicleDynamicsController::steeringTask(void* arg) {
 
         // TODO: implement fixed frequency stuff
 
-        vTaskDelay(pdMS_TO_TICKS(controller->config_.task_period));
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / controller->config_.frequency + 500) / 1000));
     }
 }
 
 void VehicleDynamicsController::motorTask(void* arg) {
     auto* controller = static_cast<VehicleDynamicsController*>(arg);
+    TickType_t last_wake_time = xTaskGetTickCount();
+
 
     const VehicleData& vehicle_data = VehicleData::instance();
     constexpr auto ch_throttle = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
@@ -282,7 +285,7 @@ void VehicleDynamicsController::motorTask(void* arg) {
         const uint16_t dshot_value = std::ranges::clamp(throttle_value + 48, 48, 2047);
 
         if (!controller->armed_) {
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / controller->config_.frequency + 500) / 1000));
             continue;
         }
 
@@ -291,7 +294,7 @@ void VehicleDynamicsController::motorTask(void* arg) {
         controller->motor_rl_.sendThrottle(dshot_value);
         controller->motor_rr_.sendThrottle(dshot_value);
 
-        vTaskDelay(pdMS_TO_TICKS(controller->config_.task_period));
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / controller->config_.frequency + 500) / 1000));
 
         continue;
 
@@ -303,7 +306,7 @@ void VehicleDynamicsController::motorTask(void* arg) {
             controller->motor_rl_.sendThrottle(dshot_value);
             controller->motor_rr_.sendThrottle(dshot_value);
 
-            vTaskDelay(pdMS_TO_TICKS(controller->config_.task_period));
+            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / controller->config_.frequency + 500) / 1000));
             continue;
         }
 
@@ -367,7 +370,7 @@ void VehicleDynamicsController::motorTask(void* arg) {
                      );
         }
 
-        vTaskDelay(pdMS_TO_TICKS(controller->config_.task_period));
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / controller->config_.frequency + 500) / 1000));
     }
 
 }
@@ -450,8 +453,8 @@ void VehicleDynamicsController::motorTask(void* arg) {
         }
 
 
-
-        vTaskDelayUntil(&last_wake_time, controller->config_.task_period);
+        // vTaskDelay(pdMS_TO_TICKS((1000000 / controller->config_.frequency + 500) / 1000));
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / controller->config_.frequency + 500) / 1000));
     }
 }
 

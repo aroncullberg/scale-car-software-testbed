@@ -24,7 +24,7 @@ public:
         int baud_rate{38400};
         size_t rx_buffer_size{2048};
         size_t tx_buffer_size{0};
-        TickType_t task_period {pdMS_TO_TICKS(100)};
+        uint16_t frequency{30};
     };
 
     GPS(const Config& config);
@@ -60,7 +60,6 @@ private:
     bool is_running{false};
     bool debug_logging_{false};
     bool verbose_logging_{false};
-    uint8_t debug_logging_interval_ms_{100};
 };
 
 }
