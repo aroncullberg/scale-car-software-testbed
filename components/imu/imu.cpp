@@ -9,7 +9,7 @@
 
 namespace sensor
 {
-    IMU::IMU(const Config &config) : config_t(config) {
+    IMU::IMU(const Config &config) : config_(config) {
         config_callback_ = [this] { this->updateFromConfig(); };
         ConfigManager::instance().registerCallback(config_callback_);
         updateFromConfig();
@@ -24,15 +24,12 @@ namespace sensor
 
     esp_err_t IMU::init() {
         ESP_LOGI(TAG, "Initializing IMU on SPI bus (MISO:%d, MOSI:%d, SCK:%d, CS:%d)",
-                 config_t.spi_miso_pin, config_t.spi_mosi_pin,
-                 config_t.spi_sck_pin, config_t.spi_cs_pin);
+                 config_.spi_miso_pin, config_.spi_mosi_pin,
+                 config_.spi_sck_pin, config_.spi_cs_pin);
 
-        esp_err_t err = configureSPI();
-        if (err != ESP_OK) {
-            return err;
-        }
+        configureSPI();
 
-        err = configureIMU();
+        esp_err_t err = configureIMU();
         if (err != ESP_OK) {
             return err;
         }
@@ -41,7 +38,7 @@ namespace sensor
     }
 
     void IMU::updateFromConfig() {
-        // Update logging settings
+        // Update logging_ settings
         bool new_log_accel = ConfigManager::instance().getBool("imu/log_accel", log_accel_);
         if (new_log_accel != log_accel_) {
             ESP_LOGI(TAG, "IMU log accel changed: %s -> %s",
@@ -57,6 +54,14 @@ namespace sensor
             log_gyro_ = new_log_gyro;
         }
 
+        bool new_log_freq = ConfigManager::instance().getBool("imu/log_freq", log_freq_);
+        if (new_log_freq != log_freq_) {
+            ESP_LOGI(TAG, "IMU log actual frequency changed: %s -> %s",
+                     log_freq_ ? "true" : "false",
+                     new_log_freq ? "true" : "false");
+            log_freq_ = new_log_freq;
+        }
+
         // For the deadband values, assume the user enters the value in human-friendly units:
         // - Gyro deadband in DPS
         // - Accel deadband in g
@@ -64,7 +69,7 @@ namespace sensor
                                                                       static_cast<float>(deadband_gyro_) *
                                                                       ImuData::GYRO_TO_DPS);
         // Convert DPS to raw units (using the inverse of GYRO_TO_DPS)
-        int16_t new_deadband_gyro = static_cast<int16_t>(user_deadband_gyro / sensor::ImuData::GYRO_TO_DPS + 0.5f);
+        auto new_deadband_gyro = static_cast<int16_t>(user_deadband_gyro / sensor::ImuData::GYRO_TO_DPS + 0.5f);
         if (new_deadband_gyro != deadband_gyro_) {
             ESP_LOGI(TAG, "IMU gyro deadband changed: %f DPS -> %d raw", user_deadband_gyro, new_deadband_gyro);
             deadband_gyro_ = new_deadband_gyro;
@@ -82,25 +87,23 @@ namespace sensor
         }
     }
 
-    esp_err_t IMU::configureSPI() {
-        spi_bus_config_.miso_io_num = config_t.spi_miso_pin;
-        spi_bus_config_.mosi_io_num = config_t.spi_mosi_pin;
-        spi_bus_config_.sclk_io_num = config_t.spi_sck_pin;
+    void IMU::configureSPI() {
+        spi_bus_config_.miso_io_num = config_.spi_miso_pin;
+        spi_bus_config_.mosi_io_num = config_.spi_mosi_pin;
+        spi_bus_config_.sclk_io_num = config_.spi_sck_pin;
         spi_bus_config_.quadwp_io_num = -1;
         spi_bus_config_.quadhd_io_num = -1;
         spi_bus_config_.max_transfer_sz = 512 * 8;
 
-        device_config_.clock_speed_hz = config_t.spi_clock_speed_hz;
+        device_config_.clock_speed_hz = config_.spi_clock_speed_hz;
         device_config_.mode = 0;
-        device_config_.spics_io_num = config_t.spi_cs_pin;
+        device_config_.spics_io_num = config_.spi_cs_pin;
         device_config_.queue_size = 1;
 
-        ESP_ERROR_CHECK(spi_bus_initialize(config_t.spi_host, &spi_bus_config_, SPI_DMA_CH_AUTO));
-        ESP_ERROR_CHECK(spi_bus_add_device(config_t.spi_host, &device_config_, &spi_handle_));
+        ESP_ERROR_CHECK(spi_bus_initialize(config_.spi_host, &spi_bus_config_, SPI_DMA_CH_AUTO));
+        ESP_ERROR_CHECK(spi_bus_add_device(config_.spi_host, &device_config_, &spi_handle_));
 
         icm20948_init_spi(&icm_device_, &spi_handle_);
-
-        return ESP_OK;
     }
 
     esp_err_t IMU::configureIMU() {
@@ -112,7 +115,7 @@ namespace sensor
             ESP_LOGW(TAG, "ID check failed, attempt %d of %d", retry_count + 1, MAX_RETRIES);
             retry_count++;
             if (retry_count < MAX_RETRIES) {
-                vTaskDelay(pdMS_TO_TICKS((1000000 / config_t.frequency + 500) / 1000));
+                vTaskDelay(pdMS_TO_TICKS(10));
             }
         }
 
@@ -133,7 +136,7 @@ namespace sensor
                 ESP_LOGW(TAG, "whoami does not match (0x%02x). Retrying...", whoami);
                 retry_count++;
 
-                vTaskDelay(pdMS_TO_TICKS((1000000 / config_t.frequency + 500) / 1000));
+                vTaskDelay(pdMS_TO_TICKS(10));
             } else {
                 break;
             }
@@ -148,15 +151,15 @@ namespace sensor
 
         // Reste the device
         icm20948_sw_reset(&icm_device_);
-        vTaskDelay(pdMS_TO_TICKS((1000000 / config_t.frequency + 500) / 1000));
+        vTaskDelay(pdMS_TO_TICKS(100));
 
         // Wake up the device before configuring
         // NOTE: this is kinda important, i mean what moron would try to configure it without waking up the device FIRST.
         icm20948_sleep(&icm_device_, false);
-        vTaskDelay(pdMS_TO_TICKS((1000000 / config_t.frequency + 500) / 1000));
+        vTaskDelay(pdMS_TO_TICKS(100));
 
         icm20948_low_power(&icm_device_, false);
-        vTaskDelay(pdMS_TO_TICKS((1000000 / config_t.frequency + 500) / 1000));
+        vTaskDelay(pdMS_TO_TICKS(100));
 
         // Set full scale ranges using direct register access, wont work otherwise, i dont like it either.
         esp_err_t err = setFullScaleRanges();
@@ -175,65 +178,66 @@ namespace sensor
         }
 
 #if CONFIG_IMU_ENABLE_DLPF
-    icm20948_dlpcfg_t dlp_config;
+        icm20948_dlpcfg_t dlp_config;
 
-    // ACC_D473BW_N499BW = Most responsive, least filtering
-    // ACC_D246BW_N265BW = Good balance for RC car
-    // ACC_D111BW_N136BW = More filtering, good for rough terrain
-    // ACC_D50BW_N68BW   = Heavy filtering, very smooth but more lag
-    dlp_config.a = ACC_D246BW_N265BW;
+        // ACC_D473BW_N499BW = Most responsive, least filtering
+        // ACC_D246BW_N265BW = Good balance for RC car
+        // ACC_D111BW_N136BW = More filtering, good for rough terrain
+        // ACC_D50BW_N68BW   = Heavy filtering, very smooth but more lag
+        dlp_config.a = ACC_D246BW_N265BW;
 
-    // GYR_D361BW4_N376BW5 = Most responsive, least filtering
-    // GYR_D196BW6_N229BW8 = Good balance for RC car
-    // GYR_D151BW8_N187BW6 = More filtering
-    // GYR_D119BW5_N154BW3 = Heavy filtering, very smooth but more lag
-    dlp_config.g = GYR_D196BW6_N229BW8;
+        // GYR_D361BW4_N376BW5 = Most responsive, least filtering
+        // GYR_D196BW6_N229BW8 = Good balance for RC car
+        // GYR_D151BW8_N187BW6 = More filtering
+        // GYR_D119BW5_N154BW3 = Heavy filtering, very smooth but more lag
+        dlp_config.g = GYR_D196BW6_N229BW8;
 
-    // Set DLPF configuration
-    status = icm20948_set_dlpf_cfg(&icm_device_,
-        (icm20948_internal_sensor_id_bm)(ICM_20948_INTERNAL_ACC | ICM_20948_INTERNAL_GYR),
-        dlp_config);
-    if (status != ICM_20948_STAT_OK) {
-        ESP_LOGE(TAG, "Failed to configure DLPF settings");
-        return ESP_FAIL;
-    }
+        // Set DLPF configuration
+        status = icm20948_set_dlpf_cfg(&icm_device_,
+            (icm20948_internal_sensor_id_bm)(ICM_20948_INTERNAL_ACC | ICM_20948_INTERNAL_GYR),
+            dlp_config);
+        if (status != ICM_20948_STAT_OK) {
+            ESP_LOGE(TAG, "Failed to configure DLPF settings");
+            return ESP_FAIL;
+        }
 
-    // Enable DLPF for both sensors
-    status = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_ACC, true);
-    if (status != ICM_20948_STAT_OK) {
-        ESP_LOGE(TAG, "Failed to enable accelerometer DLPF");
-        return ESP_FAIL;
-    }
+        // Enable DLPF for both sensors
+        status = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_ACC, true);
+        if (status != ICM_20948_STAT_OK) {
+            ESP_LOGE(TAG, "Failed to enable accelerometer DLPF");
+            return ESP_FAIL;
+        }
 
-    status = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_GYR, true);
-    if (status != ICM_20948_STAT_OK) {
-        ESP_LOGE(TAG, "Failed to enable gyroscope DLPF");
-        return ESP_FAIL;
-    }
+        status = icm20948_enable_dlpf(&icm_device_, ICM_20948_INTERNAL_GYR, true);
+        if (status != ICM_20948_STAT_OK) {
+            ESP_LOGE(TAG, "Failed to enable gyroscope DLPF");
+            return ESP_FAIL;
+        }
 #endif
 
         return ESP_OK;
     }
 
     esp_err_t IMU::setFullScaleRanges() {
+
 #if CONFIG_IMU_DEBUG_FSR
-    // Get current settings for debug purposes
-    icm20948_set_bank(&icm_device_, 2);
+        // Get current settings for debug purposes
+        icm20948_set_bank(&icm_device_, 2);
 
-    icm20948_accel_config_t accel_config_before;
-    icm20948_status_e acc_status = icm20948_execute_r(&icm_device_, AGB2_REG_ACCEL_CONFIG,
-                                                     (uint8_t*)&accel_config_before,
-                                                     sizeof(accel_config_before));
+        icm20948_accel_config_t accel_config_before;
+        icm20948_status_e acc_status = icm20948_execute_r(&icm_device_, AGB2_REG_ACCEL_CONFIG,
+                                                         (uint8_t*)&accel_config_before,
+                                                         sizeof(accel_config_before));
 
-    icm20948_gyro_config_1_t gyro_config_before;
-    icm20948_status_e gyro_status = icm20948_execute_r(&icm_device_, AGB2_REG_GYRO_CONFIG_1,
-                                                      (uint8_t*)&gyro_config_before,
-                                                      sizeof(gyro_config_before));
+        icm20948_gyro_config_1_t gyro_config_before;
+        icm20948_status_e gyro_status = icm20948_execute_r(&icm_device_, AGB2_REG_GYRO_CONFIG_1,
+                                                          (uint8_t*)&gyro_config_before,
+                                                          sizeof(gyro_config_before));
 
-    if (acc_status == ICM_20948_STAT_OK && gyro_status == ICM_20948_STAT_OK) {
-        ESP_LOGI(TAG, "Current settings - Accel FSR: %d, Gyro FSR: %d",
-                 accel_config_before.ACCEL_FS_SEL, gyro_config_before.GYRO_FS_SEL);
-    }
+        if (acc_status == ICM_20948_STAT_OK && gyro_status == ICM_20948_STAT_OK) {
+            ESP_LOGI(TAG, "Current settings - Accel FSR: %d, Gyro FSR: %d",
+                     accel_config_before.ACCEL_FS_SEL, gyro_config_before.GYRO_FS_SEL);
+        }
 #endif
 
         // Make sure we're in the right bank
@@ -242,16 +246,16 @@ namespace sensor
         // Set accelerometer FSR
         icm20948_accel_config_t accel_config;
         icm20948_status_e status = icm20948_execute_r(&icm_device_, AGB2_REG_ACCEL_CONFIG,
-                                                      (uint8_t *) &accel_config,
+                                                      reinterpret_cast<uint8_t *>(&accel_config),
                                                       sizeof(accel_config));
         if (status != ICM_20948_STAT_OK) {
             ESP_LOGE(TAG, "Failed to read accelerometer config");
             return ESP_FAIL;
         }
 
-        accel_config.ACCEL_FS_SEL = config_t.accel_fsr;
+        accel_config.ACCEL_FS_SEL = config_.accel_fsr;
         status = icm20948_execute_w(&icm_device_, AGB2_REG_ACCEL_CONFIG,
-                                    (uint8_t *) &accel_config,
+                                    reinterpret_cast<uint8_t *>(&accel_config),
                                     sizeof(accel_config));
         if (status != ICM_20948_STAT_OK) {
             ESP_LOGE(TAG, "Failed to write accelerometer FSR");
@@ -259,21 +263,21 @@ namespace sensor
         }
 
         // NOTE: mgith need to have dlayed here
-        // vTaskDelay(pdMS_TO_TICKS(10)); // Give it time to apply
+        vTaskDelay(pdMS_TO_TICKS(10)); // Give it time to apply
 
         // Set gyroscope FSR
         icm20948_gyro_config_1_t gyro_config;
         status = icm20948_execute_r(&icm_device_, AGB2_REG_GYRO_CONFIG_1,
-                                    (uint8_t *) &gyro_config,
+                                    reinterpret_cast<uint8_t *>(&gyro_config),
                                     sizeof(gyro_config));
         if (status != ICM_20948_STAT_OK) {
             ESP_LOGE(TAG, "Failed to read gyroscope config");
             return ESP_FAIL;
         }
 
-        gyro_config.GYRO_FS_SEL = config_t.gyro_fsr;
+        gyro_config.GYRO_FS_SEL = config_.gyro_fsr;
         status = icm20948_execute_w(&icm_device_, AGB2_REG_GYRO_CONFIG_1,
-                                    (uint8_t *) &gyro_config,
+                                    reinterpret_cast<uint8_t *>(&gyro_config),
                                     sizeof(gyro_config));
         if (status != ICM_20948_STAT_OK) {
             ESP_LOGE(TAG, "Failed to write gyroscope FSR");
@@ -281,25 +285,25 @@ namespace sensor
         }
 
         // NOTE: might need to have delay here
-        // vTaskDelay(pdMS_TO_TICKS(10)); // Give it time to apply
+        vTaskDelay(pdMS_TO_TICKS(100)); // Give it time to apply
 
 #if CONFIG_IMU_DEBUG_FSR
-    // Verify the settings were correctly applied
-    icm20948_set_bank(&icm_device_, 2);
+        // Verify the settings were correctly applied
+        icm20948_set_bank(&icm_device_, 2);
 
-    icm20948_accel_config_t accel_config_after;
-    icm20948_execute_r(&icm_device_, AGB2_REG_ACCEL_CONFIG,
-                      (uint8_t*)&accel_config_after,
-                      sizeof(accel_config_after));
+        icm20948_accel_config_t accel_config_after;
+        icm20948_execute_r(&icm_device_, AGB2_REG_ACCEL_CONFIG,
+                          (uint8_t*)&accel_config_after,
+                          sizeof(accel_config_after));
 
-    icm20948_gyro_config_1_t gyro_config_after;
-    icm20948_execute_r(&icm_device_, AGB2_REG_GYRO_CONFIG_1,
-                       (uint8_t*)&gyro_config_after,
-                       sizeof(gyro_config_after));
+        icm20948_gyro_config_1_t gyro_config_after;
+        icm20948_execute_r(&icm_device_, AGB2_REG_GYRO_CONFIG_1,
+                           (uint8_t*)&gyro_config_after,
+                           sizeof(gyro_config_after));
 
-    ESP_LOGI(TAG, "After setting - Accel FSR: %d (expected %d), Gyro FSR: %d (expected %d)",
-             accel_config_after.ACCEL_FS_SEL, config_t.accel_fsr,
-             gyro_config_after.GYRO_FS_SEL, config_t.gyro_fsr);
+        ESP_LOGI(TAG, "After setting - Accel FSR: %d (expected %d), Gyro FSR: %d (expected %d)",
+                 accel_config_after.ACCEL_FS_SEL, config_t.accel_fsr,
+                 gyro_config_after.GYRO_FS_SEL, config_t.gyro_fsr);
 #endif
 
         return ESP_OK;
@@ -319,8 +323,8 @@ namespace sensor
                     ICM_20948_STAT_OK);
         success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GYROSCOPE, 1) ==
                     ICM_20948_STAT_OK);
-        success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GYROSCOPE_UNCALIBRATED, 1) ==
-                    ICM_20948_STAT_OK);
+        // success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GYROSCOPE_UNCALIBRATED, 1) ==
+        // ICM_20948_STAT_OK);
 
         success &= (inv_icm20948_enable_dmp_sensor(&icm_device_, INV_ICM20948_SENSOR_GAME_ROTATION_VECTOR, 1) ==
                     ICM_20948_STAT_OK);
@@ -399,6 +403,7 @@ namespace sensor
         TickType_t last_wake_time = xTaskGetTickCount();
         icm_20948_DMP_data_t dmp_data;
 
+
         while (true) {
             icm20948_status_e status = inv_icm20948_read_dmp_data(&instance->icm_device_, &dmp_data);
 
@@ -432,33 +437,35 @@ namespace sensor
                     }
                 }
 
-                if (dmp_data.header & DMP_header_bitmap_Gyro) {
+
+                if (dmp_data.header & DMP_header_bitmap_Gyro_Calibr) {
+                // if (dmp_data.header & DMP_header_bitmap_Gyro) {
                     // NOTE: This is some disgusting code, but it works so i guess its fine as a temporary (read: semi-permantent) solution
-                    // if (dmp_data.Raw_Gyro.Data.X - dmp_data.Raw_Gyro.Data.BiasX < instance->deadband_gyro_) {
-                    //     ESP_LOGI(TAG, "gyro X within deadband data: %5d bias: %5d, diff: %5d", dmp_data.Raw_Gyro.Data.X, dmp_data.Raw_Gyro.Data.BiasX, dmp_data.Raw_Gyro.Data.X - dmp_data.Raw_Gyro.Data.BiasX);
-                    //     dmp_data.Raw_Gyro.Data.X = dmp_data.Raw_Gyro.Data.BiasX;
-                    // }
+                    if (std::abs(dmp_data.Raw_Gyro.Data.X - dmp_data.Raw_Gyro.Data.BiasX) < instance->deadband_gyro_) {
+                        ESP_LOGI(TAG, "gyro X within deadband data: %5d bias: %5d, diff: %5d", dmp_data.Raw_Gyro.Data.X, dmp_data.Raw_Gyro.Data.BiasX, dmp_data.Raw_Gyro.Data.X - dmp_data.Raw_Gyro.Data.BiasX);
+                        dmp_data.Raw_Gyro.Data.X = dmp_data.Raw_Gyro.Data.BiasX;
+                    }
                     instance->current_data_.gyro_x = dmp_data.Raw_Gyro.Data.X - dmp_data.Raw_Gyro.Data.BiasX;
 
-                    // if (dmp_data.Raw_Gyro.Data.Y - dmp_data.Raw_Gyro.Data.BiasY < instance->deadband_gyro_) {
-                    //     ESP_LOGI(TAG, "gyro Y within deadband data: %5d bias: %5d, diff: %5d", dmp_data.Raw_Gyro.Data.Y, dmp_data.Raw_Gyro.Data.BiasY, dmp_data.Raw_Gyro.Data.Y - dmp_data.Raw_Gyro.Data.BiasY);
-                    //     dmp_data.Raw_Gyro.Data.Y = dmp_data.Raw_Gyro.Data.BiasY;
-                    // }
+                    if (std::abs(dmp_data.Raw_Gyro.Data.Y - dmp_data.Raw_Gyro.Data.BiasY) < instance->deadband_gyro_) {
+                        ESP_LOGI(TAG, "gyro Y within deadband data: %5d bias: %5d, diff: %5d", dmp_data.Raw_Gyro.Data.Y, dmp_data.Raw_Gyro.Data.BiasY, dmp_data.Raw_Gyro.Data.Y - dmp_data.Raw_Gyro.Data.BiasY);
+                        dmp_data.Raw_Gyro.Data.Y = dmp_data.Raw_Gyro.Data.BiasY;
+                    }
                     instance->current_data_.gyro_y = dmp_data.Raw_Gyro.Data.Y - dmp_data.Raw_Gyro.Data.BiasY;
 
-                    // if (dmp_data.Raw_Gyro.Data.Z - dmp_data.Raw_Gyro.Data.BiasZ < instance->deadband_gyro_) {
-                    //     ESP_LOGI(TAG, "gyro Z within deadband data: %5d bias: %5d, diff: %5d", dmp_data.Raw_Gyro.Data.Z, dmp_data.Raw_Gyro.Data.BiasZ, dmp_data.Raw_Gyro.Data.Z - dmp_data.Raw_Gyro.Data.BiasZ);
-                    //     dmp_data.Raw_Gyro.Data.Z = dmp_data.Raw_Gyro.Data.BiasZ;
-                    // }
+                    if (std::abs(dmp_data.Raw_Gyro.Data.Z - dmp_data.Raw_Gyro.Data.BiasZ) < instance->deadband_gyro_) {
+                        ESP_LOGI(TAG, "gyro Z within deadband data: %5d bias: %5d, diff: %5d", dmp_data.Raw_Gyro.Data.Z, dmp_data.Raw_Gyro.Data.BiasZ, dmp_data.Raw_Gyro.Data.Z - dmp_data.Raw_Gyro.Data.BiasZ);
+                        dmp_data.Raw_Gyro.Data.Z = dmp_data.Raw_Gyro.Data.BiasZ;
+                    }
                     instance->current_data_.gyro_z = dmp_data.Raw_Gyro.Data.Z - dmp_data.Raw_Gyro.Data.BiasZ;
 
                     data_updated = true;
 
                     if (instance->log_gyro_) {
-                        ESP_LOGI(TAG, "Gyro: x=%.3f dps, y=%.3f dps, z=%.3f dps",
-                            static_cast<double>(instance->current_data_.gyro_x) / 65.5f,
-                            static_cast<double>(instance->current_data_.gyro_y) / 65.5f,
-                            static_cast<double>(instance->current_data_.gyro_z) / 65.5f);
+                        ESP_LOGI(TAG, "Gyro: x=%04.04f dps, y=%04.04f dps, z=%04.04f dps",
+                            static_cast<double>(instance->current_data_.gyro_x) * sensor::ImuData::GYRO_TO_DPS,
+                            static_cast<double>(instance->current_data_.gyro_y) * sensor::ImuData::GYRO_TO_DPS,
+                            static_cast<double>(instance->current_data_.gyro_z) * sensor::ImuData::GYRO_TO_DPS);
                     }
 
                     // TODO: evaluate if we even need raw/unfiltered data
@@ -515,13 +522,40 @@ namespace sensor
                 ESP_LOGW(TAG, "DMP read error, count %lu", instance->current_data_.quality.error_count);
             }
 
-            // unly delai if no data is aviablle
-            if (status != ICM_20948_STAT_FIFO_MORE_DATA_AVAIL) {
-                vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / instance->config_t.frequency + 500) / 1000));
-            }
+            // // unly delai if no data is aviablle
+            // if (status != ICM_20948_STAT_FIFO_MORE_DATA_AVAIL) {
+            //     vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(instance->config_.targetFreq));
+            //
+            //     if (instance->log_freq_) {
+            //         static TickType_t prev_wake = 0;
+            //         TickType_t now = xTaskGetTickCount();
+            //         if (prev_wake != 0) {
+            //             TickType_t delta_ticks = now - prev_wake;
+            //             if (delta_ticks > 0) {
+            //                 uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
+            //                 ESP_LOGI(TAG, "Frequency: %lu Hz", freq_hz);
+            //             }
+            //         }
+            //         prev_wake = now;
+            //     }
+            //     continue;
+            // }
 
             // TODO: make this into a global macro(🤢🤮) or something
-            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / instance->config_t.frequency + 500) / 1000));
+            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(instance->config_.targetFreq));
+
+            if (instance->log_freq_) {
+                static TickType_t prev_wake = 0;
+                TickType_t now = xTaskGetTickCount();
+                if (prev_wake != 0) {
+                    TickType_t delta_ticks = now - prev_wake;
+                    if (delta_ticks > 0) {
+                        uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
+                        ESP_LOGI(TAG, "Frequency: %lu Hz", freq_hz);
+                    }
+                }
+                prev_wake = now;
+            }
         }
     }
 } // namespace sensor
