@@ -7,6 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "system_types.h"
 #include "sensor_types.h"
 
 extern "C" {
@@ -27,7 +28,7 @@ public:
         int8_t spi_sck_pin{-1};
         int8_t spi_cs_pin{-1};
         int spi_clock_speed_hz{250000};
-        uint16_t frequency{30};
+        Frequency targetFreq{Frequency::F10Hz};
 
         icm20948_accel_config_fs_sel_e accel_fsr{GPM_4}; // NOTE: 
         icm20948_gyro_config_1_fs_sel_e gyro_fsr{DPS_500};
@@ -47,7 +48,7 @@ public:
     void updateFromConfig();
 
 private:
-    esp_err_t configureSPI();
+    void configureSPI();
     esp_err_t configureIMU();
     esp_err_t initializeDMP();
 
@@ -57,7 +58,7 @@ private:
     TaskHandle_t task_handle_{nullptr};
     esp_err_t setFullScaleRanges();
 
-    Config config_t; // TODO: rename to be config_ instead of config_t
+    Config config_; // TODO: rename to be config_ instead of config_t
     icm20948_device_t icm_device_{};
     spi_device_handle_t spi_handle_{nullptr};
     
@@ -74,6 +75,7 @@ private:
 
     bool log_accel_{false};
     bool log_gyro_{false};
+    bool log_freq_{false};
     // TODO: add log_quat6 and log_quat9
     // TODO: add log gyro raw
     int16_t deadband_gyro_{0};    // Stored in raw sensor units
