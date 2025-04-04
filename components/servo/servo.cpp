@@ -123,8 +123,6 @@ esp_err_t Servo::init() {
 }
 
 void Servo::updateFromConfig() {
-    ESP_LOGI(TAG, "Updating Servo configuration from ConfigManager");
-
     bool new_invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
     if (new_invert_steering_ != invert_steering_) {
         ESP_LOGI(TAG, "Invert steering changed: %d -> %d",

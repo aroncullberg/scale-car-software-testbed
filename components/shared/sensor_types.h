@@ -123,6 +123,8 @@ namespace sensor
     };
 
 
+
+
     struct ImuData {
         // Using GMP_4 which means the values are ... )TODO=
         int16_t accel_x{0}; // 1 unit = 1/80?? g // (positive) X is forwards movement
@@ -156,6 +158,26 @@ namespace sensor
             float accel_accuracy{0.0f};
             float gyro_accuracy{0.0f};
         } quality;
+
+        struct Bias {
+            struct {
+                int16_t x{0};
+                int16_t y{0};
+                int16_t z{0};
+            } gyro;
+            struct {
+                int16_t x{0};
+                int16_t y{0};
+                int16_t z{0};
+            } accel;
+            struct {
+                int16_t x{0};
+                int16_t y{0};
+                int16_t z{0};
+            } mag;
+
+            Bias() = default;
+        } bias;
 
         // Default constructor for zero-initialization
         ImuData() = default;

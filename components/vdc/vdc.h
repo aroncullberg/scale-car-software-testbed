@@ -8,6 +8,7 @@
 #include "pid.h"
 #include "quaternion.h"
 #include "config_manager.h"
+#include "system_types.h"
 
 #include "DShotRMT.h"
 
@@ -29,8 +30,7 @@ public:
 
         uint16_t steering_pid_hz{60};
 
-        uint16_t frequency{30};
-
+        Frequency frequency{Frequency::F10Hz};
         uint32_t task_stack_size{4096};
         uint8_t task_priority{5};
     };
@@ -85,6 +85,7 @@ private:
 
     float gyro_deadband_{0.1f};
 
+    bool flag_{false}; // NOTE: sorry for the name :P
     bool log_erp_{false};
     bool is_running_{false};
     bool bypass_pid_{false};

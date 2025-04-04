@@ -17,6 +17,8 @@ extern "C" {
 
 static const int FOUR_MHZ = 4000000;
 
+int16_t applyDeadband(int16_t value, int16_t bias, int16_t deadband);
+
 namespace sensor {
 
 class IMU {
@@ -45,9 +47,12 @@ public:
     esp_err_t start();
     esp_err_t stop();
 
+    esp_err_t calibrateSensors();
+
     void updateFromConfig();
 
 private:
+
     void configureSPI();
     esp_err_t configureIMU();
     esp_err_t initializeDMP();
@@ -76,6 +81,7 @@ private:
     bool log_accel_{false};
     bool log_gyro_{false};
     bool log_freq_{false};
+
     // TODO: add log_quat6 and log_quat9
     // TODO: add log gyro raw
     int16_t deadband_gyro_{0};    // Stored in raw sensor units
