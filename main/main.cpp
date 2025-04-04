@@ -9,12 +9,8 @@
 #include "vdc.h"
 #include "log_monitor.h"
 #include "config_manager.h"
-#include <DShotRMT.h>
+#include "system_types.h"
 #include <stdio.h>
-#include <esp_log.h>
-#include <driver/gpio.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 
 #ifndef TAG
@@ -35,6 +31,7 @@ static HeapRegion_t xHeapRegions[] =
     { (uint8_t *)EXTERNAL_PSRAM_BASE_ADDRESS + HEAP_REGION1_SIZE, HEAP_REGION2_SIZE },
     { NULL, 0 } // Terminates the array
 };
+
 
 extern "C" [[noreturn]] void app_main(void) {
     ESP_LOGI("main", "Initializing ConfigManager");
@@ -65,7 +62,7 @@ extern "C" [[noreturn]] void app_main(void) {
             .uart_tx_pin = GPIO_NUM_17,
             .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_SBUS_UART_RX),
             .baud_rate = 100000,            // SBUS runs at 100k baud
-            .frequency = 60
+            .targetFreq = Frequency::F111Hz // Think sbus is
         };
         static sensor::SBUS sbus(sbus_config);
         ESP_ERROR_CHECK(sbus.init());
@@ -81,7 +78,7 @@ extern "C" [[noreturn]] void app_main(void) {
             .baud_rate = 38400, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
             .rx_buffer_size = 2048,
             .tx_buffer_size = 1024,
-            .frequency = 60,
+            .targetFreq = Frequency::F62Hz
         };
         static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
         ESP_ERROR_CHECK(gps.init());
@@ -95,7 +92,7 @@ extern "C" [[noreturn]] void app_main(void) {
             .spi_mosi_pin = CONFIG_IMU_SPI_MOSI,
             .spi_sck_pin = CONFIG_IMU_SPI_CLK,
             .spi_cs_pin = CONFIG_IMU_SPI_CS,
-            .frequency = 60
+            .targetFreq = Frequency::F100Hz
         };
         static sensor::IMU imu(imu_config);
         ESP_ERROR_CHECK(imu.init());
@@ -117,7 +114,7 @@ extern "C" [[noreturn]] void app_main(void) {
     vd_config.servo_config = servo_config;
     vd_config.task_stack_size = 8162;
     vd_config.task_priority = 7;
-    vd_config.frequency = 60;
+    vd_config.frequency = Frequency::F62Hz;
 
     static VehicleDynamicsController vd_controller(vd_config);
     ESP_ERROR_CHECK(vd_controller.init());

@@ -9,7 +9,7 @@
 namespace sensor
 {
     GPS::GPS(const Config &config) {
-        config_t = config;
+        config_ = config;
         ESP_LOGI(TAG, "GPS instance created");
 
         callback_ = [this] { this->updateFromConfig(); };
@@ -23,12 +23,12 @@ namespace sensor
 
     esp_err_t GPS::init() {
         // ESP_LOGI(TAG, "initializing GPS on UART%d (TX:%d, RX:%d, baud:%d)",
-        //  config_t.uart_num, config_t.uart_tx_pin, config_t.uart_rx_pin, config_t.baud_rate);
+        //  config_.uart_num, config_.uart_tx_pin, config_.uart_rx_pin, config_.baud_rate);
         // In your init() function, add:
         ESP_LOGI(TAG, "GPS Module Info:");
-        ESP_LOGI(TAG, "  UART Num: %d", config_t.uart_num);
-        ESP_LOGI(TAG, "  RX Pin: %d", config_t.uart_rx_pin);
-        ESP_LOGI(TAG, "  Baud Rate: %d", config_t.baud_rate);
+        ESP_LOGI(TAG, "  UART Num: %d", config_.uart_num);
+        ESP_LOGI(TAG, "  RX Pin: %d", config_.uart_rx_pin);
+        ESP_LOGI(TAG, "  Baud Rate: %d", config_.baud_rate);
 
         updateFromConfig();
 
@@ -36,8 +36,6 @@ namespace sensor
     }
 
     void GPS::updateFromConfig() {
-        ESP_LOGI(TAG, "Updating GPS configuration from ConfigManager");
-
         bool new_debug_logging = ConfigManager::instance().getBool("gps/logging", debug_logging_);
         if (new_debug_logging != debug_logging_) {
             ESP_LOGI(TAG, "Debug logging changed: %s -> %s",
@@ -56,7 +54,7 @@ namespace sensor
 
     esp_err_t GPS::configureUART() {
         uart_config_t uart_config = {
-            .baud_rate = config_t.baud_rate, // Explicitly set to 9600
+            .baud_rate = config_.baud_rate, // Explicitly set to 9600
             .data_bits = UART_DATA_8_BITS,
             .parity = UART_PARITY_DISABLE,
             .stop_bits = UART_STOP_BITS_1,
@@ -64,16 +62,16 @@ namespace sensor
             .source_clk = UART_SCLK_APB, // Try explicit clock source
         };
 
-        esp_err_t err = uart_param_config(config_t.uart_num, &uart_config);
+        esp_err_t err = uart_param_config(config_.uart_num, &uart_config);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "UART param config failed (%d)", err);
             return err;
         }
 
         // Set pins with explicit pull settings
-        err = uart_set_pin(config_t.uart_num,
-                           config_t.uart_tx_pin,
-                           config_t.uart_rx_pin,
+        err = uart_set_pin(config_.uart_num,
+                           config_.uart_tx_pin,
+                           config_.uart_rx_pin,
                            GPIO_NUM_NC, // No RTS
                            GPIO_NUM_NC); // No CTS
         if (err != ESP_OK) {
@@ -82,9 +80,9 @@ namespace sensor
         }
 
         // Install driver with larger buffers
-        err = uart_driver_install(config_t.uart_num,
-                                  config_t.rx_buffer_size, // Larger RX buffer
-                                  config_t.tx_buffer_size, // No TX buffer
+        err = uart_driver_install(config_.uart_num,
+                                  config_.rx_buffer_size, // Larger RX buffer
+                                  config_.tx_buffer_size, // No TX buffer
                                   0, // No event queue
                                   nullptr, // No queue handle
                                   0); // No interrupt flags
@@ -96,7 +94,7 @@ namespace sensor
         // Send UBX command to disable UBX protocol
         const auto ubx_cfg_prt =
                 "\xB5\x62\x06\x00\x14\x00\x01\x00\x00\x00\xD0\x08\x00\x00\x00\xC2\x01\x00\x07\x00\x01\x00\x00\x00\x00\x00\xC0\x7E";
-        uart_write_bytes(config_t.uart_num, ubx_cfg_prt, 28); // Exact 28-byte UBX packet
+        uart_write_bytes(config_.uart_num, ubx_cfg_prt, 28); // Exact 28-byte UBX packet
 
         vTaskDelay(pdMS_TO_TICKS(100));
 
@@ -109,7 +107,7 @@ namespace sensor
             0x01, 0x00, // timeRef (1 = GPS time)
             0xDE, 0x6A // Checksum
         };
-        int written = uart_write_bytes(config_t.uart_num, ubx_cfg_rate, sizeof(ubx_cfg_rate));
+        int written = uart_write_bytes(config_.uart_num, ubx_cfg_rate, sizeof(ubx_cfg_rate));
         if (written != sizeof(ubx_cfg_rate)) {
             ESP_LOGE(TAG, "Failed to send UBX-CFG-RATE command");
             return ESP_FAIL;
@@ -190,14 +188,14 @@ namespace sensor
 
         while (true) {
             if (!gps->debug_logging_) {
-                vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / gps->config_t.frequency + 500) / 1000));
+                vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
                 continue;
             }
             GpsData current_data = VehicleData::instance().getGPS();
 
             if (!current_data.status.bits.valid_fix) {
                 ESP_LOGW(TAG, "No valid GPS fix (satellites: %u)", current_data.quality.satellites);
-                vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / gps->config_t.frequency + 500) / 1000));
+                vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
                 continue;
             }
 
@@ -211,14 +209,14 @@ namespace sensor
             ESP_LOGI(TAG, "%3.2f kmh (%3.2f) | sat count: %d", current_speed_kmh, max_speed_kmh,
                      current_data.quality.satellites);
 
-            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / gps->config_t.frequency + 500) / 1000));
+            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
         }
     }
 
 
     void GPS::gpsTask(void *parameters) {
         const auto gps = static_cast<GPS *>(parameters);
-        const uart_port_t uart_num = gps->config_t.uart_num;
+        const uart_port_t uart_num = gps->config_.uart_num;
 
         // Buffer for reading UART data
 
@@ -250,7 +248,19 @@ namespace sensor
                 }
             }
 
-            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS((1000000 / gps->config_t.frequency + 500) / 1000));
+            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
+            if (gps->log_freq_) { // TODO: connect log_freq_ to configmanager
+                static TickType_t prev_wake = 0;
+                TickType_t now = xTaskGetTickCount();
+                if (prev_wake != 0) {
+                    TickType_t delta_ticks = now - prev_wake;
+                    if (delta_ticks > 0) {
+                        uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
+                        ESP_LOGI(TAG, "Frequency: %lu Hz", freq_hz);
+                    }
+                }
+                prev_wake = now;
+            }
         }
     }
 
