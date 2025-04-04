@@ -11,50 +11,26 @@ struct TaskStats {
     float cpu_usage_percent;
 };
 
-struct SystemStats {
-    // Memory stats
-    uint32_t free_heap_size;
-    uint32_t min_free_heap;
-    uint8_t heap_fragmentation;
-    
-    // CPU stats
-    float cpu_frequency_mhz;
-    float cpu_temperature_c;
-    uint8_t cpu_usage_percent;
-    
-    // Task stats
-    uint8_t task_count;
-    TaskStats tasks[16];  // Adjust size based on needs
-    
-    // WiFi/Network stats
-    int8_t wifi_rssi;
-    uint32_t wifi_tx_packets;
-    uint32_t wifi_rx_packets;
-    
-    // Timing stats
-    uint32_t uptime_seconds;
-    float loop_time_us;
+enum class Frequency : uint16_t {
+    F1000Hz = 1,   // 1000 / 1 = 1000 Hz
+    F500Hz  = 2,   // 1000 / 2 = 500 Hz
+    F333Hz  = 3,   // 1000 / 3 ≈ 333 Hz
+    F250Hz  = 4,   // 1000 / 4 = 250 Hz
+    F200Hz  = 5,   // 1000 / 5 = 200 Hz
+    F166Hz  = 6,   // 1000 / 6 ≈ 166 Hz
+    F142Hz  = 7,   // 1000 / 7 ≈ 142 Hz
+    F125Hz  = 8,   // 1000 / 8 = 125 Hz
+    F111Hz  = 9,   // 1000 / 9 ≈ 111 Hz
+    F100Hz  = 10,  // 1000 / 10 = 100 Hz
+    F83Hz   = 12,  // 1000 / 12 ≈ 83 Hz
+    F71Hz   = 14,  // 1000 / 14 ≈ 71 Hz
+    F62Hz   = 16,  // 1000 / 16 = 62 Hz
+    F50Hz   = 20,  // 1000 / 20 = 50 Hz
+    F40Hz   = 25,  // 1000 / 25 = 40 Hz
+    F25Hz   = 40,  // 1000 / 40 = 25 Hz
+    F20Hz   = 50,  // 1000 / 50 = 20 Hz
+    F10Hz   = 100  // 1000 / 100 = 10 Hz
 };
 
-struct CompactSystemStats {
-    // Memory stats
-    uint32_t free_heap_size;
-    uint32_t min_free_heap;
-    uint8_t heap_fragmentation;
-    
-    // CPU stats
-    float cpu_frequency_mhz;
-    float cpu_temperature_c;
-    uint8_t cpu_usage_percent;
-    
-    // Task summary (instead of full task details)
-    uint8_t task_count;
-    uint32_t max_task_watermark;  // Highest watermark across all tasks
-    
-    // WiFi/Network stats
-    int8_t wifi_rssi;
-    
-    // Timing stats
-    uint32_t uptime_seconds;
-    float loop_time_us;
-};
+
+

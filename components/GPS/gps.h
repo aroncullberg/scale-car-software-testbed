@@ -10,6 +10,7 @@
 #include <functional>
 
 #include "sensor_types.h"
+#include "system_types.h"
 
 #define MATCH 0
 
@@ -25,6 +26,7 @@ public:
         size_t rx_buffer_size{2048};
         size_t tx_buffer_size{0};
         uint16_t frequency{30};
+        Frequency targetFreq{Frequency::F10Hz};
     };
 
     GPS(const Config& config);
@@ -51,7 +53,7 @@ private:
     bool reporting_running_{false};
 
     TinyGPSPlus tiny_gps_;
-    Config config_t;
+    Config config_;
     GpsData current_data{}; // TODO: rename to current_data_
     uint32_t max_speed_mmps_{0}; // Maximum speed in mm/s
 
@@ -60,6 +62,7 @@ private:
     bool is_running{false};
     bool debug_logging_{false};
     bool verbose_logging_{false};
+    bool log_freq_{false};
 };
 
 }
