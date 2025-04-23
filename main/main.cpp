@@ -78,7 +78,7 @@ extern "C" [[noreturn]] void app_main(void) {
             .baud_rate = 38400, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
             .rx_buffer_size = 2048,
             .tx_buffer_size = 1024,
-            .targetFreq = Frequency::F62Hz
+            .targetFreq = Frequency::F25Hz
         };
         static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
         ESP_ERROR_CHECK(gps.init());
@@ -101,7 +101,7 @@ extern "C" [[noreturn]] void app_main(void) {
 
     Servo::Config servo_config;
     servo_config.gpio_num = static_cast<gpio_num_t>(CONFIG_SERVO_OUTPUT_GPIO);
-    servo_config.freq_hz = static_cast<uint32_t>(CONFIG_SERVO_FREQUENCY_HZ);
+    // servo_config.freq_hz = static_cast<uint32_t>(CONFIG_SERVO_FREQUENCY_HZ);
     servo_config.min_pulse_width_us = static_cast<uint32_t>(1000);
     servo_config.max_pulse_width_us = static_cast<uint32_t>(2000);
 
@@ -110,11 +110,11 @@ extern "C" [[noreturn]] void app_main(void) {
     vd_config.motors_config.front_right_pin = static_cast<gpio_num_t>(39);
     vd_config.motors_config.rear_left_pin = static_cast<gpio_num_t>(40);
     vd_config.motors_config.rear_right_pin = static_cast<gpio_num_t>(41);
-    vd_config.motors_config.dshot_mode = DSHOT300_BIDIRECTIONAL;
+    vd_config.motors_config.dshot_mode = DSHOT300;
     vd_config.servo_config = servo_config;
     vd_config.task_stack_size = 8162;
     vd_config.task_priority = 7;
-    vd_config.frequency = Frequency::F62Hz;
+    vd_config.frequency = Frequency::F125Hz;
 
     static VehicleDynamicsController vd_controller(vd_config);
     ESP_ERROR_CHECK(vd_controller.init());

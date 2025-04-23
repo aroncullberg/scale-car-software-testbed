@@ -36,7 +36,6 @@ esp_err_t Servo::init() {
     // Calculate period based on frequency
     uint32_t period_ticks = TIMEBASE_RESOLUTION_HZ / config_.freq_hz;
 
-    // Create timer
     mcpwm_timer_config_t timer_config = {
         .group_id = 0,
         .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
@@ -50,7 +49,6 @@ esp_err_t Servo::init() {
         return err;
     }
 
-    // Create operator
     mcpwm_operator_config_t operator_config = {
         .group_id = 0,
     };
@@ -60,14 +58,12 @@ esp_err_t Servo::init() {
         return err;
     }
 
-    // Connect timer and operator
     err = mcpwm_operator_connect_timer(operator_, timer_);
     if (err != ESP_OK) {
         ESP_LOGE("servo", "Failed to connect timer to operator: %d", err);
         return err;
     }
 
-    // Create comparator
     mcpwm_comparator_config_t comparator_config = {
         .flags = {.update_cmp_on_tez = true}
     };
@@ -77,7 +73,8 @@ esp_err_t Servo::init() {
         return err;
     }
 
-    // Create generator
+    mcpwm_comparator_set_compare_value(comparator_, center_pulse_width_us_);
+
     mcpwm_generator_config_t generator_config = {
         .gen_gpio_num = config_.gpio_num,
     };
@@ -87,7 +84,6 @@ esp_err_t Servo::init() {
         return err;
     }
 
-    // Set generator actions
     err = mcpwm_generator_set_action_on_timer_event(
         generator_,
         MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH)
@@ -152,6 +148,11 @@ uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
                           static_cast<uint32_t>(config_.min_pulse_width_us),
                           static_cast<uint32_t>(config_.max_pulse_width_us));
     }
+
+    // if (range_ < 0 || range_ > 75) {
+    //     ESP_LOGW(TAG, "Range out of bounds: %d, setting to default 20%%", range_);
+    //     range_ = std::clamp(range_, 0, 75);
+    // }
 
     if (range_ < 0 || range_ > 75) {
         ESP_LOGW(TAG, "Range out of bounds: %d, setting to default 20%%", range_);
