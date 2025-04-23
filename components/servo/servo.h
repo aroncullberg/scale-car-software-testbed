@@ -38,7 +38,7 @@ private:
     mcpwm_cmpr_handle_t comparator_{nullptr};
     mcpwm_gen_handle_t generator_{nullptr};
 
-    int center_pulse_width_us_{1500};  // Maximum pulse width in microseconds
+    int center_pulse_width_us_{1500};
     int offset_{0};
     int range_{65};
     bool invert_steering_{true};
