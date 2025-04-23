@@ -84,17 +84,17 @@ esp_err_t VehicleDynamicsController::start() {
 
     ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_FAIL, TAG, "Failed to create steering task");
 
-    ret = xTaskCreatePinnedToCore(
-        motorTask,
-        "motor_task",
-        4096,
-        this,
-        5,
-        &motortask_handle_,
-        1
-    );
-
-    ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_FAIL, TAG, "Failed to create motor task");
+    // ret = xTaskCreatePinnedToCore(
+    //     motorTask,
+    //     "motor_task",
+    //     4096,
+    //     this,
+    //     5,
+    //     &motortask_handle_,
+    //     1
+    // );
+    //
+    // ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_FAIL, TAG, "Failed to create motor task");
 
     is_running_ = true;
     return ESP_OK;
@@ -262,8 +262,6 @@ void VehicleDynamicsController::steeringTask(void* arg) {
 
         controller->steering_servo_.setPosition(output);
 
-        // TODO: implement fixed frequency stuff
-
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
     }
 }
@@ -275,12 +273,12 @@ void VehicleDynamicsController::motorTask(void* arg) {
 
     const VehicleData& vehicle_data = VehicleData::instance();
     constexpr auto ch_throttle = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
+    return;
 
     while (true) {
         const sensor::SbusData& sbus_data = vehicle_data.getSbus();
         const sensor::eRPMData& erpm_data = vehicle_data.getErpm();
         const sensor::channel_t throttle_value = sbus_data.channels_scaled[ch_throttle];
-
 
         const uint16_t dshot_value = std::ranges::clamp(throttle_value + 48, 48, 2047);
 
@@ -288,6 +286,8 @@ void VehicleDynamicsController::motorTask(void* arg) {
             vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
             continue;
         }
+
+        ESP_LOGI(TAG, "Throttle: %d", throttle_value);
 
         controller->motor_fl_.sendThrottle(dshot_value);
         controller->motor_fr_.sendThrottle(dshot_value);
@@ -393,6 +393,7 @@ void VehicleDynamicsController::motorTask(void* arg) {
 
     while (true) {
         const sensor::SbusData& sbus_data = vehicle_data.getSbus();
+        const sensor::channel_t throttle_value = sbus_data.channels_scaled[ch_throttle];
 
         if (!sbus_data.quality.valid_signal) {
             if (!controller->failsafe_) {
@@ -458,6 +459,7 @@ void VehicleDynamicsController::motorTask(void* arg) {
         }
 
         if (sbus_data.channels_scaled[ch_calibrate] > 1900) {
+            ESP_LOGI(TAG, "Calibrating IMU");
             controller->failsafe_ = true;
 
             constexpr TickType_t calibrate_duration = pdMS_TO_TICKS(3000);
@@ -470,6 +472,15 @@ void VehicleDynamicsController::motorTask(void* arg) {
             int64_t sum_accel_y = 0;
             int64_t sum_accel_z = 0;
             uint32_t sample_count = 0;
+
+            sensor::ImuData imu_data = vehicle_data.getImu();
+            imu_data.bias.gyro.x = 0;
+            imu_data.bias.gyro.y = 0;
+            imu_data.bias.gyro.z = 0;
+            imu_data.bias.accel.x = 0;
+            imu_data.bias.accel.y = 0;
+            imu_data.bias.accel.z = 0;
+            VehicleData::instance().updateIMU(imu_data);
 
             while (xTaskGetTickCount() - start_time < calibrate_duration) {
                 sum_gyro_x += vehicle_data.getImu().gyro_x;
@@ -488,7 +499,7 @@ void VehicleDynamicsController::motorTask(void* arg) {
                 continue;
             }
 
-            sensor::ImuData imu_data = vehicle_data.getImu();
+            imu_data = vehicle_data.getImu();
             imu_data.bias.gyro.x = static_cast<int16_t>(sum_gyro_x / sample_count);
             imu_data.bias.gyro.y = static_cast<int16_t>(sum_gyro_y / sample_count);
             imu_data.bias.gyro.z = static_cast<int16_t>(sum_gyro_z / sample_count);
@@ -504,20 +515,28 @@ void VehicleDynamicsController::motorTask(void* arg) {
                      imu_data.bias.accel.y,
                      imu_data.bias.accel.z);
 
+            VehicleData::instance().updateIMU(imu_data);
+
             controller->failsafe_ = false;
         }
 
+        if (!controller->failsafe_ && controller->armed_) {
+            const uint16_t dshot_value = std::ranges::clamp(throttle_value + 48, 48, 2047);
+            if (!controller->armed_) {
+                vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
+                continue;
+            }
 
-        // TickType_t now = xTaskGetTickCount();
-        // TickType_t delta_ticks = now - last_wake_time;
-        //
-        // // Avoid divide-by-zero
-        // if (delta_ticks > 0) {
-        //     uint32_t freq_hz = 1000 / delta_ticks;
-        //     ESP_LOGI(TAG, "Frequency: %u Hz", freq_hz);
-        // }
+            ESP_LOGI(TAG, "Throttle: %d", throttle_value);
+
+            controller->motor_fl_.sendThrottle(dshot_value);
+            controller->motor_fr_.sendThrottle(dshot_value);
+            controller->motor_rl_.sendThrottle(dshot_value);
+            controller->motor_rr_.sendThrottle(dshot_value);
+
+        }
+
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
-
 
     }
 }

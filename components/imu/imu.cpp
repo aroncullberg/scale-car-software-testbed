@@ -446,12 +446,16 @@ void sensor::IMU::imuTask(void *parameters) {
 
                 data_updated = true;
 
-                if (instance->log_gyro_) {
-                    ESP_LOGI(TAG, "Gyro (XYZ in dps) - %+5.03f %+5.03f %+5.03f",
-                             static_cast<double>(instance->current_data_.gyro_x) * sensor::ImuData::GYRO_TO_DPS,
-                             static_cast<double>(instance->current_data_.gyro_y) * sensor::ImuData::GYRO_TO_DPS,
-                             static_cast<double>(instance->current_data_.gyro_z) * sensor::ImuData::GYRO_TO_DPS);
-                }
+//                 if (instance->log_gyro_) {
+//                     ESP_LOGI(TAG, "Gyro (XYZ in dps) - %+5.03f (%+5.3f) %+5.03f (%+5.3f) %+5.03f (%+5.3f)",
+//                              static_cast<double>(instance->current_data_.gyro_x) * sensor::ImuData::GYRO_TO_DPS,
+//                              static_cast<double>(instance->current_data_.bias.gyro.x) * sensor::ImuData::GYRO_TO_DPS,
+//                              static_cast<double>(instance->current_data_.gyro_y) * sensor::ImuData::GYRO_TO_DPS,
+//                              static_cast<double>(instance->current_data_.bias.gyro.y) * sensor::ImuData::GYRO_TO_DPS,
+//                              static_cast<double>(instance->current_data_.gyro_z) * sensor::ImuData::GYRO_TO_DPS,
+//                                 static_cast<double>(instance->current_data_.bias.gyro.z) * sensor::ImuData::GYRO_TO_DPS);
+// ;
+//                 }
             }
 
             if (dmp_data.header & DMP_header_bitmap_Quat6) {
@@ -492,6 +496,12 @@ void sensor::IMU::imuTask(void *parameters) {
                 //     instance->current_data_.quality.update_rate_hz = 1000.0f / interval;
                 // }
                 // last_wake_time = current_time;
+                instance->current_data_.bias.accel.x = VehicleData::instance().getImu().bias.accel.x;
+                instance->current_data_.bias.accel.y = VehicleData::instance().getImu().bias.accel.y;
+                instance->current_data_.bias.accel.z = VehicleData::instance().getImu().bias.accel.z;
+                instance->current_data_.bias.gyro.x = VehicleData::instance().getImu().bias.gyro.x;
+                instance->current_data_.bias.gyro.y = VehicleData::instance().getImu().bias.gyro.y;
+                instance->current_data_.bias.gyro.z = VehicleData::instance().getImu().bias.gyro.z;
 
                 VehicleData::instance().updateIMU(instance->current_data_);
             }

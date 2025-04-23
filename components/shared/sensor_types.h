@@ -184,6 +184,7 @@ namespace sensor
     };
 
     struct Servo {
+        static constexpr uint32_t US_FAILSAFE = 1500;
         static constexpr channel_t FAILSAFE_POSITION = 1000;
         static constexpr channel_t MIN_POSITION = 0;
         static constexpr channel_t MAX_POSITION = 2000;
