@@ -188,14 +188,17 @@ namespace sensor
 
         while (true) {
             if (!gps->debug_logging_) {
-                vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
+                // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
+                vTaskDelay(pdMS_TO_TICKS(gps->config_.targetFreq));
+
                 continue;
             }
             GpsData current_data = VehicleData::instance().getGPS();
 
             if (!current_data.status.bits.valid_fix) {
                 ESP_LOGW(TAG, "No valid GPS fix (satellites: %u)", current_data.quality.satellites);
-                vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
+                // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
+                vTaskDelay(pdMS_TO_TICKS(gps->config_.targetFreq));
                 continue;
             }
 
@@ -209,7 +212,8 @@ namespace sensor
             ESP_LOGI(TAG, "%3.2f kmh (%3.2f) | sat count: %d", current_speed_kmh, max_speed_kmh,
                      current_data.quality.satellites);
 
-            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
+            // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
+            vTaskDelay(pdMS_TO_TICKS(gps->config_.targetFreq));
         }
     }
 
@@ -248,19 +252,20 @@ namespace sensor
                 }
             }
 
-            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
-            if (gps->log_freq_) { // TODO: connect log_freq_ to configmanager
-                static TickType_t prev_wake = 0;
-                TickType_t now = xTaskGetTickCount();
-                if (prev_wake != 0) {
-                    TickType_t delta_ticks = now - prev_wake;
-                    if (delta_ticks > 0) {
-                        uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
-                        ESP_LOGI(TAG, "Frequency: %lu Hz", freq_hz);
-                    }
-                }
-                prev_wake = now;
-            }
+            // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(gps->config_.targetFreq));
+            vTaskDelay(pdMS_TO_TICKS(gps->config_.targetFreq));
+            // if (gps->log_freq_) { // TODO: connect log_freq_ to configmanager
+            //     static TickType_t prev_wake = 0;
+            //     TickType_t now = xTaskGetTickCount();
+            //     if (prev_wake != 0) {
+            //         TickType_t delta_ticks = now - prev_wake;
+            //         if (delta_ticks > 0) {
+            //             uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
+            //             ESP_LOGI(TAG, "Frequency: %lu Hz", freq_hz);
+            //         }
+            //     }
+            //     prev_wake = now;
+            // }
         }
     }
 

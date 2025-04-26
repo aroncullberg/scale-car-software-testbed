@@ -154,7 +154,7 @@ namespace sensor
         while (true) {
             // Wait for start byte
             // NOTE: pdMS_TO_TICKS(5) take note and see if this time can be optimized. (boring math)
-            while (uart_read_bytes(instance->config_.uart_num, &byte, 1, pdMS_TO_TICKS(5)) > 0) {
+            while (uart_read_bytes(instance->config_.uart_num, &byte, 1, pdMS_TO_TICKS(14)) > 0) {
                 if (byte == start_byte) {
                     instance->frame_buffer_[0] = byte;
                     instance->buffer_index_ = 1;
@@ -168,7 +168,7 @@ namespace sensor
                 int read = uart_read_bytes(instance->config_.uart_num,
                                            &instance->frame_buffer_[1],
                                            remaining,
-                                           pdMS_TO_TICKS(3));
+                                           pdMS_TO_TICKS(1));
 
                 if (read == remaining && instance->frame_buffer_[FRAME_SIZE - 1] == end_byte) {
                     // Valid frame received
@@ -196,19 +196,20 @@ namespace sensor
             //     ESP_LOGI(TAG, "Frequency: %u Hz", freq_hz);
             // }
 
-            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(instance->config_.targetFreq));
+            // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(instance->config_.targetFreq));
+            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(7));
 
             // if (instance->log_freq_) { // TODO: connect log_freq_ to configmanager
-            //     static TickType_t prev_wake = 0;
-            //     TickType_t now = xTaskGetTickCount();
-            //     if (prev_wake != 0) {
-            //         TickType_t delta_ticks = now - prev_wake;
-            //         if (delta_ticks > 0) {
-            //             uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
-            //             ESP_LOGI(TAG, "Frequency: %lu Hz", freq_hz);
-            //         }
-            //     }
-            //     prev_wake = now;
+                // static TickType_t prev_wake = 0;
+                // TickType_t now = xTaskGetTickCount();
+                // if (prev_wake != 0) {
+                //     TickType_t delta_ticks = now - prev_wake;
+                //     if (delta_ticks > 0) {
+                //         uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
+                //         ESP_LOGI(TAG, "Frequency: %lu Hz", freq_hz);
+                //     }
+                // }
+                // prev_wake = now;
             // }
         }
     }

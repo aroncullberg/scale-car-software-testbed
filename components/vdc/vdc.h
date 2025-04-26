@@ -30,7 +30,7 @@ public:
 
         uint16_t steering_pid_hz{60};
 
-        Frequency frequency{Frequency::F10Hz};
+        Frequency frequency{Frequency::F62Hz};
         uint32_t task_stack_size{4096};
         uint8_t task_priority{5};
     };
@@ -52,7 +52,6 @@ private:
 
     [[noreturn]] static void controllerTask(void* arg);
     [[noreturn]] static void steeringTask(void* arg);
-    [[noreturn]] static void motorTask(void* arg);
 
     esp_err_t updateThrottle(sensor::channel_t throttle_value);
 
