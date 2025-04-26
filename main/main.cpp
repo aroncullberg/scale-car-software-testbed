@@ -62,7 +62,7 @@ extern "C" [[noreturn]] void app_main(void) {
             .uart_tx_pin = GPIO_NUM_17,
             .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_SBUS_UART_RX),
             .baud_rate = 100000,            // SBUS runs at 100k baud
-            .targetFreq = Frequency::F111Hz // Think sbus is
+            .targetFreq = Frequency::F100Hz // Think sbus is
         };
         static sensor::SBUS sbus(sbus_config);
         ESP_ERROR_CHECK(sbus.init());
@@ -78,7 +78,7 @@ extern "C" [[noreturn]] void app_main(void) {
             .baud_rate = 38400, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
             .rx_buffer_size = 2048,
             .tx_buffer_size = 1024,
-            .targetFreq = Frequency::F25Hz
+            .targetFreq = Frequency::F10Hz
         };
         static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
         ESP_ERROR_CHECK(gps.init());
@@ -110,11 +110,11 @@ extern "C" [[noreturn]] void app_main(void) {
     vd_config.motors_config.front_right_pin = static_cast<gpio_num_t>(39);
     vd_config.motors_config.rear_left_pin = static_cast<gpio_num_t>(40);
     vd_config.motors_config.rear_right_pin = static_cast<gpio_num_t>(41);
-    vd_config.motors_config.dshot_mode = DSHOT300;
+    vd_config.motors_config.dshot_mode = DSHOT300_BIDIRECTIONAL;
     vd_config.servo_config = servo_config;
     vd_config.task_stack_size = 8162;
     vd_config.task_priority = 7;
-    vd_config.frequency = Frequency::F125Hz;
+    vd_config.frequency = Frequency::F200Hz;
 
     static VehicleDynamicsController vd_controller(vd_config);
     ESP_ERROR_CHECK(vd_controller.init());

@@ -159,6 +159,7 @@ uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
         range_ = 20;
     }
 
+
     constexpr int32_t symmetric_offset = (sensor::Servo::MAX_POSITION - sensor::Servo::MIN_POSITION) / 2;
 
     const int32_t normalized_position = static_cast<int32_t>(position) - symmetric_offset;
@@ -170,6 +171,8 @@ uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
     if (invert_steering_) {
         pulse_width = config_.min_pulse_width_us + config_.max_pulse_width_us - pulse_width;
     }
+
+    // ESP_LOGI(TAG, "Pulse width: %lu", pulse_width);
 
     return std::clamp(pulse_width, static_cast<uint32_t>(config_.min_pulse_width_us), static_cast<uint32_t>(config_.max_pulse_width_us));
 }

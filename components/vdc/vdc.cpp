@@ -32,15 +32,16 @@ esp_err_t VehicleDynamicsController::init() {
     ESP_RETURN_ON_ERROR(err, TAG, "Failed to initialize steering servo");
 
     // TODO: Initialize pid with config values at init
+    pid_steering_.reset();
     pid_steering_.setKd(ConfigManager::instance().getFloat("steerpid/kd", pid_steering_.getKd()));
     pid_steering_.setKi(ConfigManager::instance().getFloat("steerpid/ki", pid_steering_.getKi()));
     pid_steering_.setKp(ConfigManager::instance().getFloat("steerpid/kp", pid_steering_.getKp()));
     pid_steering_.setAntiWindupLimit(ConfigManager::instance().getFloat("steerpid/antiwu", pid_steering_.getAntiWindupLimit()));
 
-    pid_motor_fl_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_fl_.getKp()));
-    pid_motor_fr_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_fr_.getKp()));
-    pid_motor_rl_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_rl_.getKp()));
-    pid_motor_rr_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_rr_.getKp()));
+    // pid_motor_fl_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_fl_.getKp()));
+    // pid_motor_fr_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_fr_.getKp()));
+    // pid_motor_rl_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_rl_.getKp()));
+    // pid_motor_rr_.setKp(ConfigManager::instance().getFloat("motorpid/kp", pid_motor_rr_.getKp()));
 
     motor_fr_.begin_UNSAFE();
     motor_fl_.begin_UNSAFE();
@@ -117,8 +118,6 @@ esp_err_t VehicleDynamicsController::stop() {
 
 void VehicleDynamicsController::updateFromConfig() {
     ESP_LOGI(TAG, "Updating VDC configuration from ConfigManager");
-
-
 
     float new_steerpid_kp = ConfigManager::instance().getFloat("steerpid/kp", pid_steering_.getKp());
     if (new_steerpid_kp != pid_steering_.getKp()) {
@@ -225,6 +224,15 @@ void VehicleDynamicsController::steeringTask(void* arg) {
 
     controller->pid_steering_.enablePID();
 
+    // controller->max_turn_rate_ = 120.0f;
+
+    // ESP_LOGI(TAG, "Test kp: %f", controller->pid_steering_.getKp());
+    // ESP_LOGI(TAG, "Test ki: %f", controller->pid_steering_.getKi());
+    // ESP_LOGI(TAG, "Test kd: %f", controller->pid_steering_.getKd());
+    // ESP_LOGI(TAG, "Test antiwu: %f", controller->pid_steering_.getAntiWindupLimit());
+    // ESP_LOGI(TAG, "Test gyro deadband: %f", controller->gyro_deadband_);
+    // ESP_LOGI(TAG, "Test max turn rate: %f", controller->max_turn_rate_);
+
     const VehicleData& vehicle_data = VehicleData::instance();
     constexpr auto ch_steering = static_cast<size_t>(sensor::SbusChannel::STEERING);
     while (true) {
@@ -234,13 +242,30 @@ void VehicleDynamicsController::steeringTask(void* arg) {
 
         if (controller->failsafe_) {
             controller->steering_servo_.setPosition(sensor::Servo::FAILSAFE_POSITION);
-            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
+            // ESP_LOGI("TAG", "Failsafe engaged, setting steering to failsafe position");
+            // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
+            vTaskDelay(pdMS_TO_TICKS(controller->config_.frequency));
+
             continue;
         }
 
         if (controller->bypass_pid_) {
             controller->steering_servo_.setPosition(steering_value);
-            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
+            // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
+            // ESP_LOGI("TAG", "Bypassed steering engaged to %d", steering_value);
+            vTaskDelay(pdMS_TO_TICKS(10));
+
+            // static TickType_t prev_wake = 0;
+            // TickType_t now = xTaskGetTickCount();
+            // if (prev_wake != 0) {
+            //     TickType_t delta_ticks = now - prev_wake;
+            //     if (delta_ticks > 0) {
+            //         uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
+            //         ESP_LOGI("STEERING LOOP", "Frequency: %lu Hz", freq_hz);
+            //     }
+            // }
+            // prev_wake = now;
+
             continue;
         }
         // TODO: CHeck for valid gyro data
@@ -248,131 +273,42 @@ void VehicleDynamicsController::steeringTask(void* arg) {
         const float desired_rate = controller->max_turn_rate_ * (static_cast<float>(steering_value)-1000.0f) / 1000.0f;
         const float current_rate = imu_data.gyro_z * sensor::ImuData::GYRO_TO_DPS;
 
+
+
         float error = desired_rate - current_rate;
 
-        if (std::fabs(error) < controller->gyro_deadband_) {
-            error = 0;
-        }
+        // if (std::fabs(error) < controller->gyro_deadband_) {
+        //     error = 0;
+        // }
 
         const float pid_output = controller->pid_steering_.update(error);
 
         int16_t output = sensor::Servo::NEUTRAL_POSITION + static_cast<int16_t>(pid_output);
 
+        // ESP_LOGI(TAG, "Desired rate: %+4f, Current rate: %+4f, PID Output %+4f", desired_rate, current_rate, pid_output);
+
         output = std::ranges::clamp(output, sensor::Servo::MIN_POSITION, sensor::Servo::MAX_POSITION);
+
+        // ESP_LOGI(TAG, "steer loop: %d\n", output);
 
         controller->steering_servo_.setPosition(output);
 
-        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
+        // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
+        vTaskDelay(pdMS_TO_TICKS(10));
+
+            // static TickType_t prev_wake = 0;
+            // TickType_t now = xTaskGetTickCount();
+            // if (prev_wake != 0) {
+            //     TickType_t delta_ticks = now - prev_wake;
+            //     if (delta_ticks > 0) {
+            //         uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
+            //         ESP_LOGI("STEERING LOOP", "Frequency: %lu Hz", freq_hz);
+            //     }
+            // }
+            // prev_wake = now;
+
+
     }
-}
-
-void VehicleDynamicsController::motorTask(void* arg) {
-    auto* controller = static_cast<VehicleDynamicsController*>(arg);
-    TickType_t last_wake_time = xTaskGetTickCount();
-
-
-    const VehicleData& vehicle_data = VehicleData::instance();
-    constexpr auto ch_throttle = static_cast<size_t>(sensor::SbusChannel::THROTTLE);
-    return;
-
-    while (true) {
-        const sensor::SbusData& sbus_data = vehicle_data.getSbus();
-        const sensor::eRPMData& erpm_data = vehicle_data.getErpm();
-        const sensor::channel_t throttle_value = sbus_data.channels_scaled[ch_throttle];
-
-        const uint16_t dshot_value = std::ranges::clamp(throttle_value + 48, 48, 2047);
-
-        if (!controller->armed_) {
-            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
-            continue;
-        }
-
-        ESP_LOGI(TAG, "Throttle: %d", throttle_value);
-
-        controller->motor_fl_.sendThrottle(dshot_value);
-        controller->motor_fr_.sendThrottle(dshot_value);
-        controller->motor_rl_.sendThrottle(dshot_value);
-        controller->motor_rr_.sendThrottle(dshot_value);
-
-        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
-
-        continue;
-
-        // NOTE: i realized there is a fundamental logic error in this setup so i dont think we can do it like this.
-
-        if (throttle_value < 100 || controller->bypass_pid_) {
-            controller->motor_fl_.sendThrottle(dshot_value);
-            controller->motor_fr_.sendThrottle(dshot_value);
-            controller->motor_rl_.sendThrottle(dshot_value);
-            controller->motor_rr_.sendThrottle(dshot_value);
-
-            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
-            continue;
-        }
-
-        int32_t error_fl{0};
-        int32_t error_fr{0};
-        int32_t error_rl{0};
-        int32_t error_rr{0};
-
-
-        if (erpm_data.front_left.erpm != 0 && erpm_data.front_left.erpm != 65535) {
-            error_fl = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.front_left.erpm;
-            // int32_t output_fl =  dshot_value + controller->pid_motor_fl_.update(error_fl);
-            // controller->motor_fl_.sendThrottle(output_fl);
-            controller->motor_fl_.sendThrottle(dshot_value);
-        } else {
-            controller->motor_fl_.sendThrottle(dshot_value);
-        }
-
-        if (erpm_data.front_right.erpm != 0 && erpm_data.front_right.erpm != 65535) {
-            error_fr = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.front_right.erpm;
-            // int32_t output_fr = dshot_value + controller->pid_motor_fr_.update(error_fr);
-            // controller->motor_fr_.sendThrottle(output_fr);
-            controller->motor_fr_.sendThrottle(dshot_value);
-        } else {
-            controller->motor_fr_.sendThrottle(dshot_value);
-        }
-
-        if (erpm_data.rear_left.erpm != 0 && erpm_data.rear_left.erpm != 65535) {
-            error_rl = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.rear_left.erpm;
-            // int32_t output_rl = dshot_value + controller->pid_motor_rl_.update(error_rl);
-            // controller->motor_rl_.sendThrottle(output_rl);
-            controller->motor_rl_.sendThrottle(dshot_value);
-        } else {
-            controller->motor_rl_.sendThrottle(dshot_value);
-        }
-
-        if (erpm_data.rear_right.erpm != 0 && erpm_data.rear_right.erpm != 65535) {
-            error_rr = throttle_value * controller->throttle_to_rpm_throttle_ - erpm_data.rear_right.erpm;
-            // int32_t output_rr = dshot_value + static_cast<int32_t>(controller->pid_motor_rr_.update(error_rr));
-            // controller->motor_rr_.sendThrottle(output_rr);
-            controller->motor_rr_.sendThrottle(dshot_value);
-        } else {
-            controller->motor_rr_.sendThrottle(dshot_value);
-        }
-
-        controller->updateRPMTelemetry(throttle_value);
-
-        static int count = 0;
-        if (controller->log_erp_ && count++ % 100 == 0) {
-            ESP_LOGI(TAG, "ERPM: %05lu %05lu %05lu %05lu (%05lu) | ePID offset on (%05u): %05f %05f %05f %05f",
-                     erpm_data.front_right.erpm,
-                     erpm_data.front_left.erpm,
-                     erpm_data.rear_left.erpm,
-                     erpm_data.rear_right.erpm,
-                     throttle_value * controller->throttle_to_rpm_throttle_,
-                        dshot_value,
-                        controller->pid_motor_rr_.update(error_fr),
-                        controller->pid_motor_rr_.update(error_fl),
-                        controller->pid_motor_rr_.update(error_rl),
-                        controller->pid_motor_rr_.update(error_rr)
-                     );
-        }
-
-        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
-    }
-
 }
 
 
@@ -403,7 +339,9 @@ void VehicleDynamicsController::motorTask(void* arg) {
                 ESP_LOGW(TAG, "No RX, entering failsafe");
                 controller->flag_ = true;
             }
-            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
+            // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
+            vTaskDelay(pdMS_TO_TICKS(controller->config_.frequency));
+
             continue;
         }
         controller->failsafe_ = false;
@@ -428,36 +366,6 @@ void VehicleDynamicsController::motorTask(void* arg) {
             ESP_LOGI(TAG, "Disarmed (or is it?)");
         }
 
-        if (sbus_data.channels_scaled[ch_steering_kp] < 500) {
-            controller->pid_steering_.setKp(controller->pid_steering_.getKp() - 0.1f);
-            ESP_LOGI(TAG, "KP: %f", controller->pid_steering_.getKp());
-            vTaskDelay(pdMS_TO_TICKS(100));
-        } else if (sbus_data.channels_scaled[ch_steering_kp] > 1900) {
-            controller->pid_steering_.setKp(controller->pid_steering_.getKp() + 0.1f);
-            ESP_LOGI(TAG, "KP: %f", controller->pid_steering_.getKp());
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
-
-        if (sbus_data.channels_scaled[ch_steering_kd] < 500) {
-            controller->pid_steering_.setKd(controller->pid_steering_.getKd() - 0.1f);
-            ESP_LOGI(TAG, "KD: %f", controller->pid_steering_.getKd());
-            vTaskDelay(pdMS_TO_TICKS(100));
-        } else if (sbus_data.channels_scaled[ch_steering_kd] > 1900) {
-            controller->pid_steering_.setKd(controller->pid_steering_.getKd() + 0.1f);
-            ESP_LOGI(TAG, "KD: %f", controller->pid_steering_.getKd());
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
-
-        if (sbus_data.channels_scaled[ch_steering_ki] < 500) {
-            controller->pid_steering_.setKi(controller->pid_steering_.getKi() - 0.1f);
-            ESP_LOGI(TAG, "KI: %f", controller->pid_steering_.getKi());
-            vTaskDelay(pdMS_TO_TICKS(100));
-        } else if (sbus_data.channels_scaled[ch_steering_ki] > 1900) {
-            controller->pid_steering_.setKi(controller->pid_steering_.getKi() + 0.1f);
-            ESP_LOGI(TAG, "KI: %f", controller->pid_steering_.getKi());
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
-
         if (sbus_data.channels_scaled[ch_calibrate] > 1900) {
             ESP_LOGI(TAG, "Calibrating IMU");
             controller->failsafe_ = true;
@@ -473,15 +381,6 @@ void VehicleDynamicsController::motorTask(void* arg) {
             int64_t sum_accel_z = 0;
             uint32_t sample_count = 0;
 
-            sensor::ImuData imu_data = vehicle_data.getImu();
-            imu_data.bias.gyro.x = 0;
-            imu_data.bias.gyro.y = 0;
-            imu_data.bias.gyro.z = 0;
-            imu_data.bias.accel.x = 0;
-            imu_data.bias.accel.y = 0;
-            imu_data.bias.accel.z = 0;
-            VehicleData::instance().updateIMU(imu_data);
-
             while (xTaskGetTickCount() - start_time < calibrate_duration) {
                 sum_gyro_x += vehicle_data.getImu().gyro_x;
                 sum_gyro_y += vehicle_data.getImu().gyro_y;
@@ -491,7 +390,8 @@ void VehicleDynamicsController::motorTask(void* arg) {
                 sum_accel_z += vehicle_data.getImu().accel_z;
                 sample_count++;
 
-                vTaskDelay(pdMS_TO_TICKS(10));
+                // vTaskDelay(pdMS_TO_TICKS(10));
+                vTaskDelay(pdMS_TO_TICKS(controller->config_.frequency));
             }
 
             if (sample_count < 10) {
@@ -499,44 +399,42 @@ void VehicleDynamicsController::motorTask(void* arg) {
                 continue;
             }
 
-            imu_data = vehicle_data.getImu();
-            imu_data.bias.gyro.x = static_cast<int16_t>(sum_gyro_x / sample_count);
-            imu_data.bias.gyro.y = static_cast<int16_t>(sum_gyro_y / sample_count);
-            imu_data.bias.gyro.z = static_cast<int16_t>(sum_gyro_z / sample_count);
-            imu_data.bias.accel.x = static_cast<int16_t>(sum_accel_x / sample_count);
-            imu_data.bias.accel.y = static_cast<int16_t>(sum_accel_y / sample_count);
-            imu_data.bias.accel.z = static_cast<int16_t>(sum_accel_z / sample_count);
             ESP_LOGI(TAG, "Calibration complete: Gyro bias set to x=%d, y=%d, z=%d",
-                     imu_data.bias.gyro.x,
-                     imu_data.bias.gyro.y,
-                     imu_data.bias.gyro.z);
+                     static_cast<int16_t>(sum_gyro_x / sample_count),
+                     static_cast<int16_t>(sum_gyro_y / sample_count),
+                     static_cast<int16_t>(sum_gyro_z / sample_count));
             ESP_LOGI(TAG, "Calibration complete: Accel bias set to x=%d, y=%d, z=%d",
-                     imu_data.bias.accel.x,
-                     imu_data.bias.accel.y,
-                     imu_data.bias.accel.z);
-
-            VehicleData::instance().updateIMU(imu_data);
-
+                     static_cast<int16_t>(sum_accel_x / sample_count),
+                     static_cast<int16_t>(sum_accel_y / sample_count),
+                     static_cast<int16_t>(sum_accel_z / sample_count));
             controller->failsafe_ = false;
         }
 
-        if (!controller->failsafe_ && controller->armed_) {
+        if (controller->armed_) {
             const uint16_t dshot_value = std::ranges::clamp(throttle_value + 48, 48, 2047);
-            if (!controller->armed_) {
-                vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
-                continue;
-            }
 
-            ESP_LOGI(TAG, "Throttle: %d", throttle_value);
+            // ESP_LOGI(TAG, "Throttle: %d", throttle_value);
 
             controller->motor_fl_.sendThrottle(dshot_value);
             controller->motor_fr_.sendThrottle(dshot_value);
             controller->motor_rl_.sendThrottle(dshot_value);
             controller->motor_rr_.sendThrottle(dshot_value);
-
         }
 
-        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
+        // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(controller->config_.frequency));
+        vTaskDelay(pdMS_TO_TICKS(controller->config_.frequency));
+
+
+            // static TickType_t prev_wake = 0;
+            // TickType_t now = xTaskGetTickCount();
+            // if (prev_wake != 0) {
+            //     TickType_t delta_ticks = now - prev_wake;
+            //     if (delta_ticks > 0) {
+            //         uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
+            //         ESP_LOGI("MAIN LOOP", "Frequency: %lu Hz", freq_hz);
+            //     }
+            // }
+            // prev_wake = now;
 
     }
 }

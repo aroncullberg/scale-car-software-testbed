@@ -413,17 +413,22 @@ void sensor::IMU::imuTask(void *parameters) {
 
 
 
+
+
         if ((status == ICM_20948_STAT_OK) || (status == ICM_20948_STAT_FIFO_MORE_DATA_AVAIL)) {
             bool data_updated = false;
 
             // Look, contrary to the name i think this is gravity compensated accel data since we turned on that before
             if (dmp_data.header & DMP_header_bitmap_Accel) {
-                instance->current_data_.accel_x = applyDeadband(dmp_data.Raw_Accel.Data.X, VehicleData::instance().getImu().bias.accel.x,
-                                                                instance->deadband_accel_);
-                instance->current_data_.accel_y = applyDeadband(dmp_data.Raw_Accel.Data.Y, VehicleData::instance().getImu().bias.accel.y,
-                                                                instance->deadband_accel_);
-                instance->current_data_.accel_z = applyDeadband(dmp_data.Raw_Accel.Data.Z, VehicleData::instance().getImu().bias.accel.z,
-                                                                instance->deadband_accel_);
+                instance->current_data_.accel_x = dmp_data.Raw_Accel.Data.X - 79;
+                instance->current_data_.accel_y = dmp_data.Raw_Accel.Data.Y + 30;
+                instance->current_data_.accel_z = dmp_data.Raw_Accel.Data.Z;
+                // instance->current_data_.accel_x = applyDeadband(dmp_data.Raw_Accel.Data.X, VehicleData::instance().getImu().bias.accel.x,
+                //                                                 instance->deadband_accel_);
+                // instance->current_data_.accel_y = applyDeadband(dmp_data.Raw_Accel.Data.Y, VehicleData::instance().getImu().bias.accel.y,
+                //                                                 instance->deadband_accel_);
+                // instance->current_data_.accel_z = applyDeadband(dmp_data.Raw_Accel.Data.Z, VehicleData::instance().getImu().bias.accel.z,
+                //                                                 instance->deadband_accel_);
 
                 data_updated = true;
 
@@ -436,26 +441,25 @@ void sensor::IMU::imuTask(void *parameters) {
                 }
             }
 
-            if (dmp_data.header & DMP_header_bitmap_Gyro) {
-                instance->current_data_.gyro_x = applyDeadband(dmp_data.Raw_Gyro.Data.X, VehicleData::instance().getImu().bias.gyro.x,
-                                                               instance->deadband_gyro_);
-                instance->current_data_.gyro_y = applyDeadband(dmp_data.Raw_Gyro.Data.Y, VehicleData::instance().getImu().bias.gyro.y,
-                                                               instance->deadband_gyro_);
-                instance->current_data_.gyro_z = applyDeadband(dmp_data.Raw_Gyro.Data.Z, VehicleData::instance().getImu().bias.gyro.z,
-                                                               instance->deadband_gyro_);
+            if (dmp_data.header & DMP_header_bitmap_Gyro_Calibr) {
+                instance->current_data_.gyro_x = dmp_data.Raw_Gyro.Data.X - 3;
+                instance->current_data_.gyro_y = dmp_data.Raw_Gyro.Data.Y - 8;
+                instance->current_data_.gyro_z = dmp_data.Raw_Gyro.Data.Z - 0;
+                // instance->current_data_.gyro_x = applyDeadband(dmp_data.Raw_Gyro.Data.X, VehicleData::instance().getImu().bias.gyro.x,
+                //                                                instance->deadband_gyro_);
+                // instance->current_data_.gyro_y = applyDeadband(dmp_data.Raw_Gyro.Data.Y, VehicleData::instance().getImu().bias.gyro.y,
+                //                                                instance->deadband_gyro_);
+                // instance->current_data_.gyro_z = applyDeadband(dmp_data.Raw_Gyro.Data.Z, VehicleData::instance().getImu().bias.gyro.z,
+                //                                                instance->deadband_gyro_);
 
                 data_updated = true;
 
-//                 if (instance->log_gyro_) {
-//                     ESP_LOGI(TAG, "Gyro (XYZ in dps) - %+5.03f (%+5.3f) %+5.03f (%+5.3f) %+5.03f (%+5.3f)",
-//                              static_cast<double>(instance->current_data_.gyro_x) * sensor::ImuData::GYRO_TO_DPS,
-//                              static_cast<double>(instance->current_data_.bias.gyro.x) * sensor::ImuData::GYRO_TO_DPS,
-//                              static_cast<double>(instance->current_data_.gyro_y) * sensor::ImuData::GYRO_TO_DPS,
-//                              static_cast<double>(instance->current_data_.bias.gyro.y) * sensor::ImuData::GYRO_TO_DPS,
-//                              static_cast<double>(instance->current_data_.gyro_z) * sensor::ImuData::GYRO_TO_DPS,
-//                                 static_cast<double>(instance->current_data_.bias.gyro.z) * sensor::ImuData::GYRO_TO_DPS);
-// ;
-//                 }
+                if (instance->log_gyro_) {
+                    ESP_LOGI(TAG, "Gyro (XYZ in dps) - %+5.03f %+5.03f %+5.03f",
+                             static_cast<double>(instance->current_data_.gyro_x) * sensor::ImuData::GYRO_TO_DPS,
+                             static_cast<double>(instance->current_data_.gyro_y) * sensor::ImuData::GYRO_TO_DPS,
+                             static_cast<double>(instance->current_data_.gyro_z) * sensor::ImuData::GYRO_TO_DPS);
+                }
             }
 
             if (dmp_data.header & DMP_header_bitmap_Quat6) {
@@ -530,20 +534,22 @@ void sensor::IMU::imuTask(void *parameters) {
         // }
 
         // TODO: make this into a global macro(🤢🤮) or something
-        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(instance->config_.targetFreq));
+        // vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(instance->config_.targetFreq));
+        vTaskDelay(pdMS_TO_TICKS(10));
 
-        if (instance->log_freq_) {
-            static TickType_t prev_wake = 0;
-            TickType_t now = xTaskGetTickCount();
-            if (prev_wake != 0) {
-                TickType_t delta_ticks = now - prev_wake;
-                if (delta_ticks > 0) {
-                    uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
-                    ESP_LOGI(TAG, "Frequency: %lu Hz", freq_hz);
-                }
-            }
-            prev_wake = now;
-        }
+
+        // if (instance->log_freq_) {
+        //     static TickType_t prev_wake = 0;
+        //     TickType_t now = xTaskGetTickCount();
+        //     if (prev_wake != 0) {
+        //         TickType_t delta_ticks = now - prev_wake;
+        //         if (delta_ticks > 0) {
+        //             uint32_t freq_hz = 1000 / delta_ticks; // assuming ticks are in ms
+        //             ESP_LOGI(TAG, "Frequency: %lu Hz", freq_hz);
+        //         }
+        //     }
+        //     prev_wake = now;
+        // }
     }
 }
 
