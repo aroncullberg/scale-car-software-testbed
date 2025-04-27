@@ -1,7 +1,7 @@
 idf_component_register(
     SRCS 
         "main.cpp"
-    INCLUDE_DIRS 
+    INCLUDE_DIRS
         "."
     REQUIRES         
         "esp_timer"
@@ -10,12 +10,12 @@ idf_component_register(
         "SBUS"
         "GPS"
         "imu"
-        "dshot_controller"
         "vdc"
         "log_monitor"
         "servo"
         "ConfigManager"
-#        "nvs_flash"
+        "nvs_flash"
+        "driver"
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE 

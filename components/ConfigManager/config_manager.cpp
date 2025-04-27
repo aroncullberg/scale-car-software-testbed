@@ -437,6 +437,54 @@ bool ConfigManager::keyExists(const char* key) {
     return false;
 }
 
+std::vector<std::string> ConfigManager::listKeys(const char* prefix) {
+    std::vector<std::string> keys;
+    nvs_iterator_t it = nullptr;
+    esp_err_t res = nvs_entry_find("nvs", "config", NVS_TYPE_ANY, &it);
+
+    while (res == ESP_OK) {
+        nvs_entry_info_t info;
+        nvs_entry_info(it, &info);
+        std::string key = info.key;
+
+        if (!prefix || key.find(prefix) == 0) {
+            keys.push_back(key);
+        }
+
+        res = nvs_entry_next(&it);
+    }
+    nvs_release_iterator(it);
+
+    return keys;
+}
+
+esp_err_t ConfigManager::removeKey(const char* key) {
+    if (!initialized_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    pending_bool_changes_.erase(key);
+    pending_int_changes_.erase(key);
+    pending_float_changes_.erase(key);
+    pending_string_changes_.erase(key);
+
+    esp_err_t err = nvs_erase_key(nvs_handle_, key);
+    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGE(TAG, "Failed to remove key %s: %d", key, err);
+        return err;
+    }
+
+    err = nvs_commit(nvs_handle_);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to commit after key removal: %d", err);
+        return err;
+    }
+
+    return ESP_OK;
+}
+
+
+
 ConfigManager::ValueType ConfigManager::getValueType(const char* key) {
     if (!initialized_) {
         return ValueType::UNKNOWN;

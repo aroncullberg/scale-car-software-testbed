@@ -11,8 +11,8 @@ class Servo {
 public:
     struct Config {
         gpio_num_t gpio_num{GPIO_NUM_NC};  // GPIO pin number
-        int min_pulse_width_us{1150};       // Minimum pulse width in microseconds
-        int max_pulse_width_us{1850};      // Maximum pulse width in microseconds
+        int min_pulse_width_us{1000};       // Minimum pulse width in microseconds
+        int max_pulse_width_us{2000};      // Maximum pulse width in microseconds
         uint32_t freq_hz{50};              // PWM frequency in Hz (standard servo is 50Hz)
     };
 
@@ -26,7 +26,7 @@ public:
     Servo(const Servo&) = delete;
     Servo& operator=(const Servo&) = delete;
 
-    esp_err_t setPosition(uint16_t position);
+    esp_err_t setPosition(sensor::channel_t position);
 
 private:
     esp_err_t init();
@@ -38,9 +38,9 @@ private:
     mcpwm_cmpr_handle_t comparator_{nullptr};
     mcpwm_gen_handle_t generator_{nullptr};
 
-    int center_pulse_width_us_{1500};  // Maximum pulse width in microseconds
+    int center_pulse_width_us_{1500};
     int offset_{0};
-    int range_{45};
+    int range_{65};
     bool invert_steering_{true};
 
     static constexpr uint32_t TIMEBASE_RESOLUTION_HZ = 1000000;  // 1MHz, 1us per tick

@@ -36,6 +36,9 @@ public:
     void unregisterCallback(ConfigChangeCallback* callback);
 
     bool keyExists(const char* key);
+
+    static std::vector<std::string> listKeys(const char *prefix);
+
     bool getBool(const char* key, bool default_value = false);
 
     float getFloat(const char* key, float default_value = 0.0f);
@@ -43,6 +46,8 @@ public:
     int32_t getInt(const char* key, int32_t default_value = 0);
 
     ValueType getValueType(const char* key);
+
+    esp_err_t removeKey(const char* key);
 
     esp_err_t init();
     esp_err_t setBool(const char* key, bool value);

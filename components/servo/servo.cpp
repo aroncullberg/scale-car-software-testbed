@@ -7,7 +7,7 @@ Servo::Servo(const Config& config) : config_(config) {
     // TODO: Clamp this value to a resnoable range
     invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
     offset_ = ConfigManager::instance().getInt("servo/offset", offset_);
-    range_ = ConfigManager::instance().getInt("servo/range", range_);
+    // range_ = ConfigManager::instance().getInt("servo/range", range_);
 
 
     callback_ = [this] { this->updateFromConfig(); };
@@ -36,7 +36,6 @@ esp_err_t Servo::init() {
     // Calculate period based on frequency
     uint32_t period_ticks = TIMEBASE_RESOLUTION_HZ / config_.freq_hz;
 
-    // Create timer
     mcpwm_timer_config_t timer_config = {
         .group_id = 0,
         .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
@@ -50,7 +49,6 @@ esp_err_t Servo::init() {
         return err;
     }
 
-    // Create operator
     mcpwm_operator_config_t operator_config = {
         .group_id = 0,
     };
@@ -60,14 +58,12 @@ esp_err_t Servo::init() {
         return err;
     }
 
-    // Connect timer and operator
     err = mcpwm_operator_connect_timer(operator_, timer_);
     if (err != ESP_OK) {
         ESP_LOGE("servo", "Failed to connect timer to operator: %d", err);
         return err;
     }
 
-    // Create comparator
     mcpwm_comparator_config_t comparator_config = {
         .flags = {.update_cmp_on_tez = true}
     };
@@ -77,7 +73,8 @@ esp_err_t Servo::init() {
         return err;
     }
 
-    // Create generator
+    mcpwm_comparator_set_compare_value(comparator_, center_pulse_width_us_);
+
     mcpwm_generator_config_t generator_config = {
         .gen_gpio_num = config_.gpio_num,
     };
@@ -87,7 +84,6 @@ esp_err_t Servo::init() {
         return err;
     }
 
-    // Set generator actions
     err = mcpwm_generator_set_action_on_timer_event(
         generator_,
         MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH)
@@ -123,8 +119,6 @@ esp_err_t Servo::init() {
 }
 
 void Servo::updateFromConfig() {
-    ESP_LOGI(TAG, "Updating Servo configuration from ConfigManager");
-
     bool new_invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
     if (new_invert_steering_ != invert_steering_) {
         ESP_LOGI(TAG, "Invert steering changed: %d -> %d",
@@ -155,10 +149,16 @@ uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
                           static_cast<uint32_t>(config_.max_pulse_width_us));
     }
 
-    if (range_ < 0 || range_ > 50) {
+    // if (range_ < 0 || range_ > 75) {
+    //     ESP_LOGW(TAG, "Range out of bounds: %d, setting to default 20%%", range_);
+    //     range_ = std::clamp(range_, 0, 75);
+    // }
+
+    if (range_ < 0 || range_ > 75) {
         ESP_LOGW(TAG, "Range out of bounds: %d, setting to default 20%%", range_);
         range_ = 20;
     }
+
 
     constexpr int32_t symmetric_offset = (sensor::Servo::MAX_POSITION - sensor::Servo::MIN_POSITION) / 2;
 
@@ -172,11 +172,18 @@ uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
         pulse_width = config_.min_pulse_width_us + config_.max_pulse_width_us - pulse_width;
     }
 
+    // ESP_LOGI(TAG, "Pulse width: %lu", pulse_width);
+
     return std::clamp(pulse_width, static_cast<uint32_t>(config_.min_pulse_width_us), static_cast<uint32_t>(config_.max_pulse_width_us));
 }
 
 esp_err_t Servo::setPosition(const sensor::channel_t position)  {
-    // ESP_LOGI(TAG, "Setting servo position: %ld", calculateCompareValue(position));
+    // // print every tenth call
+    // static uint32_t call_count = 0;
+    // if (call_count++ % 10 == 0) {
+    //     ESP_LOGI(TAG, "Setting servo position: %u", position);
+    // }
+    // // ESP_LOGI(TAG, "Setting servo position: %ld", calculateCompareValue(position));
     // return ESP_OK;
     return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
 }

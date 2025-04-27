@@ -6,29 +6,31 @@
 #include "SBUS.h"
 #include "gps.h"
 #include "servo.h"
-#include "esc_driver.h"
 #include "vdc.h"
 #include "log_monitor.h"
 #include "config_manager.h"
+#include "system_types.h"
+#include <stdio.h>
+
 
 #ifndef TAG
 #define TAG "main"
 #endif
 
-// FIXME: Critical issue with memory allocation in buffer overflow scenario - needs immediate attention
-// BUG: Race condition detected when multiple threads access shared resource simultaneously
-// XXX: Temporary patch for compatibility with legacy systems - must be addressed before v2.0
+// External PSRAM base address (example)
+#define EXTERNAL_PSRAM_BASE_ADDRESS 0x3F800000
 
-// TODO: Implement proper error handling for network failures
-// TASK: Add unit tests for new features
-// PENDING: Update documentation for API changes
+// Define the size of each heap region
+#define HEAP_REGION1_SIZE 0x10000  // 64 KB
+#define HEAP_REGION2_SIZE 0x20000  // 128 KB
 
-// NOTE: This algorithm has O(n^2) complexity - consider optimization
-// INFO: Configuration must be set in environment variables
-
-// OPTIMIZE: Database query executing full table scan
-// PERF: Heavy computation in main thread - consider moving to background
-// SLOW: Image processing taking too long for large files
+// Define the heap regions array
+static HeapRegion_t xHeapRegions[] =
+{
+    { (uint8_t *)EXTERNAL_PSRAM_BASE_ADDRESS, HEAP_REGION1_SIZE },
+    { (uint8_t *)EXTERNAL_PSRAM_BASE_ADDRESS + HEAP_REGION1_SIZE, HEAP_REGION2_SIZE },
+    { NULL, 0 } // Terminates the array
+};
 
 
 extern "C" [[noreturn]] void app_main(void) {
@@ -44,12 +46,9 @@ extern "C" [[noreturn]] void app_main(void) {
         ESP_LOGI("main", "Direct access to imu/enabled: %d", imu_enabled);
     }
 
-
-
     LogMonitor::Config log_config;
     log_config.ap_ssid = "ESP32-Monitor";
     log_config.ap_password = "password";
-    log_config.tcp_port = 8888;
 
     LogMonitor::instance().init(log_config);
     LogMonitor::instance().start();
@@ -62,7 +61,8 @@ extern "C" [[noreturn]] void app_main(void) {
             .uart_num = static_cast<uart_port_t>(CONFIG_SBUS_UART_NUM),
             .uart_tx_pin = GPIO_NUM_17,
             .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_SBUS_UART_RX),
-            .baud_rate = 100000            // SBUS runs at 100k baud
+            .baud_rate = 100000,            // SBUS runs at 100k baud
+            .targetFreq = Frequency::F100Hz // Think sbus is
         };
         static sensor::SBUS sbus(sbus_config);
         ESP_ERROR_CHECK(sbus.init());
@@ -70,20 +70,20 @@ extern "C" [[noreturn]] void app_main(void) {
     #endif
 
 
-    // #if CONFIG_GPS_ENABLE
-    //     sensor::GPS::Config gps_config = {
-    //         .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
-    //         .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
-    //         .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
-    //         .baud_rate = 57600, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
-    //         .rx_buffer_size = 2048,
-    //         .tx_buffer_size = 1024,
-    //     };
-    //     static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
-    //     ESP_ERROR_CHECK(gps.init());
-    //     ESP_ERROR_CHECK(gps.start());
-    // #endif
-
+    #if CONFIG_GPS_ENABLE
+        sensor::GPS::Config gps_config = {
+            .uart_num = static_cast<uart_port_t>(CONFIG_GPS_UART_NUM),
+            .uart_tx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_TX),
+            .uart_rx_pin = static_cast<gpio_num_t>(CONFIG_GPS_UART_RX),
+            .baud_rate = 38400, // NOTE: this specific one runs at 57600 even though the manual specifies the default is 9600 (which doesn't work). Which is why I won't add to KConfig (no im not just lazy)
+            .rx_buffer_size = 2048,
+            .tx_buffer_size = 1024,
+            .targetFreq = Frequency::F10Hz
+        };
+        static sensor::GPS gps(gps_config); // WARNING: This has to be a static or its killed because out-of-scope(?) after if-statement
+        ESP_ERROR_CHECK(gps.init());
+        ESP_ERROR_CHECK(gps.start());
+    #endif
 
     #if CONFIG_IMU_ENABLE
         sensor::IMU::Config imu_config = {
@@ -92,40 +92,35 @@ extern "C" [[noreturn]] void app_main(void) {
             .spi_mosi_pin = CONFIG_IMU_SPI_MOSI,
             .spi_sck_pin = CONFIG_IMU_SPI_CLK,
             .spi_cs_pin = CONFIG_IMU_SPI_CS,
+            .targetFreq = Frequency::F100Hz
         };
         static sensor::IMU imu(imu_config);
         ESP_ERROR_CHECK(imu.init());
         ESP_ERROR_CHECK(imu.start());
     #endif
-    //
-    // Configure the steering servo
-    Servo::Config servo_config = {
-        .gpio_num = static_cast<gpio_num_t>(CONFIG_SERVO_OUTPUT_GPIO),  
-        .freq_hz = static_cast<uint32_t>(CONFIG_SERVO_FREQUENCY_HZ)
-    };
 
-    // UPDATE: New ESC driver configuration
-    EscDriver::Config esc_config;
-    esc_config.motor_pins[EscDriver::MotorPosition::FRONT_RIGHT] = static_cast<gpio_num_t>(38);
-    esc_config.motor_pins[EscDriver::MotorPosition::FRONT_LEFT] = static_cast<gpio_num_t>(39);
-    esc_config.motor_pins[EscDriver::MotorPosition::REAR_LEFT] = static_cast<gpio_num_t>(40);
-    esc_config.motor_pins[EscDriver::MotorPosition::REAR_RIGHT] = static_cast<gpio_num_t>(41);
+    Servo::Config servo_config;
+    servo_config.gpio_num = static_cast<gpio_num_t>(CONFIG_SERVO_OUTPUT_GPIO);
+    // servo_config.freq_hz = static_cast<uint32_t>(CONFIG_SERVO_FREQUENCY_HZ);
+    servo_config.min_pulse_width_us = static_cast<uint32_t>(1000);
+    servo_config.max_pulse_width_us = static_cast<uint32_t>(2000);
 
-
-    const VehicleDynamicsController::Config vd_config = {
-        .steering_servo = servo_config,
-        .esc_config = esc_config,
-        .task_stack_size = 4096,
-        .task_priority = 5,
-        .task_period = pdMS_TO_TICKS(10)
-    };
+    VehicleDynamicsController::Config vd_config;
+    vd_config.motors_config.front_left_pin = static_cast<gpio_num_t>(38);
+    vd_config.motors_config.front_right_pin = static_cast<gpio_num_t>(39);
+    vd_config.motors_config.rear_left_pin = static_cast<gpio_num_t>(40);
+    vd_config.motors_config.rear_right_pin = static_cast<gpio_num_t>(41);
+    vd_config.motors_config.dshot_mode = DSHOT300_BIDIRECTIONAL;
+    vd_config.servo_config = servo_config;
+    vd_config.task_stack_size = 8162;
+    vd_config.task_priority = 7;
+    vd_config.frequency = Frequency::F200Hz;
 
     static VehicleDynamicsController vd_controller(vd_config);
     ESP_ERROR_CHECK(vd_controller.init());
     ESP_ERROR_CHECK(vd_controller.start());
 
     while(true) {
-        // ESP_LOGI("app_main", "Main loop running...");
         vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }

@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <system_types.h>
+
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_err.h"
@@ -8,10 +11,6 @@
 #include "sensor_types.h"
 // #include "system_types.h"
 // #include "telemetry_types.h"
-
-#define MIN 0
-#define MAX 1
-#define OFFSET 2
 
 namespace sensor {
 
@@ -22,6 +21,7 @@ class SBUS {
         gpio_num_t uart_tx_pin{GPIO_NUM_NC};
         gpio_num_t uart_rx_pin{GPIO_NUM_NC};
         int baud_rate{100000}; // NOTE: This value needs to be doublechecked against sbus standard baud rate, but it works so...
+        Frequency targetFreq{Frequency::F10Hz};
     };
 
     explicit SBUS(const Config& config);
@@ -33,6 +33,7 @@ class SBUS {
     esp_err_t init() const;
     esp_err_t start();
     esp_err_t stop();
+    void updateFromConfig();
 
 private:
     esp_err_t configureUART() const;
@@ -44,16 +45,21 @@ private:
     static void sbusTask(void* parameters);
     TaskHandle_t task_handle_{nullptr};
 
-    Config config_t;
+    Config config_;
     SbusData current_data_{};
 
     static constexpr size_t FRAME_SIZE = 25;
     uint8_t frame_buffer_[FRAME_SIZE]{};
     size_t buffer_index_{0};
 
-    bool is_running{false};
+    bool is_running_{false};
+    bool log_raw_{false};
+    bool logging_{false};
+    bool log_freq{false};
 
     static constexpr const char* TAG = "SBUS";
+
+    std::function<void()> config_callback_;
 };
 
 } // namespace sensor
