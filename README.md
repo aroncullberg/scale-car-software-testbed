@@ -1,6 +1,13 @@
-# High-Performance RC Car Project
+# "High-Performance" RC Car Project
 
-# Disclamer: This repo is mostly for us to have a log of what we have done, as such there will not be any help with reproducing the project.
+rc car with a eps32s3 to control it, buzzwords:
+- freertos
+- SPI (9-axis IMU)
+- UART (GPS/rclink)
+- digital errorcorrected bidirecitonal motor control protocols (DSHOT)
+- Motor Control Pulse Width Modulator to drive servos
+
+## Disclamer: This repo is mostly for us to have a log of what we have done, as such there will not be any help with reproducing the project.
 
 
 https://github.com/user-attachments/assets/70d1ed36-8229-4bed-bc21-50745e4e3fcc
