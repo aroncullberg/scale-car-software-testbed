@@ -8,8 +8,7 @@ A custom-built RC car platform using an ESP32-S3 as an intermediary between driv
 
 ## Current Build (v2)
 
-<!-- Replace with your v2 hero image -->
-![v2 Hero](resources/v2_hero.jpg)
+<img width="1076" height="982" alt="Screenshot 2025-11-30 at 18 14 50" src="https://github.com/user-attachments/assets/4eff5949-56ff-45be-8be8-315482bfbba7" />
 
 <p align="center">
   <img src="resources/middle_duck_v43_2.png" width="45%" alt="V2 rear angle" />
@@ -40,7 +39,18 @@ v1 was hard to maintain/replace broken gears, and it turns out that module 0.8mm
 
 ## Demo
 
-<!-- Add your video links here -->
+
+https://github.com/user-attachments/assets/98f6a3cb-3de6-45b8-ba74-e7486755f528
+
+
+https://github.com/user-attachments/assets/8f9d8ff1-3977-4885-bc6d-ea8ea9b9fe95
+
+
+
+https://github.com/user-attachments/assets/290ff5f4-501e-493e-9871-947214888d34
+
+
+
 https://github.com/user-attachments/assets/70d1ed36-8229-4bed-bc21-50745e4e3fcc
 
 https://github.com/user-attachments/assets/9d515676-ec9a-4bec-ab3a-135b9c511faa
