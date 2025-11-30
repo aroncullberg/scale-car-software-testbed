@@ -1,6 +1,6 @@
 # 1/10 Scale RC Car with Computer-Assisted Control
 
-A custom-built RC car platform using an ESP32-S3 as an intermediary between driver input and hardware, designed as a testbed for experimenting with torque vectoring, autonomous navigation, and advanced vehicle dynamics (lol lets see how much of this we actually implement).
+A custom-built RC car platform using an ESP32-S3 as an intermediary between driver input and hardware, designed as a testbed for experimenting with torque vectoring, autonomous navigation, and other stuff (lol lets see how much of this we actually implement).
 
 > **Note:** This repo serves as a development log for our own reference. We won't be providing support for reproducing the project.
 
