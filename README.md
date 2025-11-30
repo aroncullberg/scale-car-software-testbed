@@ -38,7 +38,7 @@ v1 was hard to maintain/replace broken gears, and it turns out that module 0.8mm
 ---
 
 ## Demo
-
+https://github.com/user-attachments/assets/290ff5f4-501e-493e-9871-947214888d34
 
 https://github.com/user-attachments/assets/98f6a3cb-3de6-45b8-ba74-e7486755f528
 
@@ -47,26 +47,12 @@ https://github.com/user-attachments/assets/8f9d8ff1-3977-4885-bc6d-ea8ea9b9fe95
 
 
 
-https://github.com/user-attachments/assets/290ff5f4-501e-493e-9871-947214888d34
-
-
-
-https://github.com/user-attachments/assets/70d1ed36-8229-4bed-bc21-50745e4e3fcc
 
 https://github.com/user-attachments/assets/9d515676-ec9a-4bec-ab3a-135b9c511faa
-
-https://github.com/user-attachments/assets/2ce086a1-ba34-4368-8fec-eeab37d5dc80
 
 ---
 
 ## Gallery
-
-### v2
-<p align="center">
-  <!-- Add v2 build photos here -->
-  <img src="resources/v2_build1.jpg" width="45%" />
-  <img src="resources/v2_build2.jpg" width="45%" />
-</p>
 
 ### v1
 <p align="center">
