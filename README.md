@@ -54,7 +54,7 @@ https://github.com/user-attachments/assets/9d515676-ec9a-4bec-ab3a-135b9c511faa
 
 ### v1
 <p align="center">
-  <img src="resources/image.png" width="45%" />
+  <img src="resources/20250618_191054.jpg" width="45%" />
   <img src="resources/20250221_143342.jpg" width="45%" />
 </p>
 
