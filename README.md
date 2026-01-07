@@ -18,6 +18,10 @@ A custom-built RC car platform using an ESP32-S3 as an intermediary between driv
 
 https://github.com/user-attachments/assets/fe65e64a-15ae-4bb7-b17b-789cece0033f
 
+<p align="center">
+  <img src="resources/p1.png" width="45%" />
+  <img src="resources/p2.png" width="45%" />
+</p>
 
 ### Why v2?
 
