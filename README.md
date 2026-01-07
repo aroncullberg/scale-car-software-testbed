@@ -13,6 +13,16 @@ A custom-built RC car platform using an ESP32-S3 as an intermediary between driv
   <img src="resources/Gearbox_2_Stage_v61_6.png" width="45%" alt="V2 front angle" />
 </p>
 
+
+
+
+https://github.com/user-attachments/assets/fe65e64a-15ae-4bb7-b17b-789cece0033f
+
+
+https://github.com/user-attachments/assets/61ce56b9-7f9c-4a24-a5dd-b28c014e2ab6
+
+
+
 ### Why v2?
 
 v1 was hard to maintain/replace broken gears, and it turns out that module 0.8mm gears made of plastic does not enjoy meshing at 50k rpm.
