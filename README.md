@@ -1,181 +1,103 @@
-# High-Performance RC Car Project
+# 1/10 Scale RC Car with Computer-Assisted Control
 
-# Disclamer: This repo is mostly for us to have a log of what we have done, as such there will not be any help with reproducing the project.
+A custom-built RC car platform using an ESP32-S3 as an intermediary between driver input and hardware, designed as a testbed for experimenting with torque vectoring, autonomous navigation, and other stuff (lol lets see how much of this we actually implement).
+
+---
+
+## Current Build (v2)
+
+<img width="1076" height="982" alt="Screenshot 2025-11-30 at 18 14 50" src="https://github.com/user-attachments/assets/4eff5949-56ff-45be-8be8-315482bfbba7" />
+
+<p align="center">
+  <img src="resources/middle_duck_v43_2.png" width="45%" alt="V2 rear angle" />
+  <img src="resources/Gearbox_2_Stage_v61_6.png" width="45%" alt="V2 front angle" />
+</p>
+
+
+
+
+https://github.com/user-attachments/assets/fe65e64a-15ae-4bb7-b17b-789cece0033f
+
+<p align="center">
+  <img src="resources/p1.png" width="45%" />
+  <img src="resources/p2.png" width="45%" />
+</p>
+
+### Why v2?
+
+v1 was hard to maintain/replace broken gears, and it turns out that module 0.8mm gears made of plastic does not enjoy meshing at 50k rpm.
+
+## Features
+
+**Implemented**
+- PID-regulated rate-of-change steering (replacing proportional steering)
+- Bidirectional motor control, and rpm feedback per motor/wheel via DSHOT protocol
+- 9-axis IMU integration over SPI
+- GPS and RC link over UART
+- Servo control via MCPWM
+
+**In Development**
+- GPS waypoint navigation
+
+**Maybe in future**
+- Torque vectoring
+- LIDAR integration (if we can get cheap one from china that meets specs)
+
+---
+
+## RC Link Abstraction
+
+The RC system auto-detects the connected receiver protocol (SBUS or ExpressLRS/CRSF) at startup, providing a unified interface regardless of hardware. Bidirectional telemetry pushes vehicle data (GPS position, IMU attitude, battery state, motor RPM) back to the transmitter in real-time.
+
+---
+
+## Managed Components
+
+External ESP-IDF components used in this project:
+
+| Component | Description | Notes |
+|-----------|-------------|-------|
+| [aroncullberg/ESP_CRSF](https://github.com/aroncullberg/ESP_CRSF) | CRSF/ELRS protocol driver | Fork - added telemetry types (airspeed, flight mode, temp, RPM) and improved failsafe handling |
+| [aroncullberg/EscDriver](https://github.com/aroncullberg/EscDriver) | DSHOT motor control driver | Fork - modified arming behaviour for this project's use case |
+| [andyfinity/TinyGPSPlus-ESPIDF](https://github.com/andyfinity/TinyGPSPlus-ESPIDF) | NMEA GPS parser | |
+| [espressif/led_strip](https://components.espressif.com/components/espressif/led_strip) | WS2812 LED driver | Espressif official component |
+| [myles-parfeniuk/esp32_BNO08x](https://github.com/myles-parfeniuk/esp32_BNO08x) | BNO08x IMU driver | |
+
+---
+
+## Demo
+https://github.com/user-attachments/assets/290ff5f4-501e-493e-9871-947214888d34
+
+https://github.com/user-attachments/assets/98f6a3cb-3de6-45b8-ba74-e7486755f528
+
+
+https://github.com/user-attachments/assets/8f9d8ff1-3977-4885-bc6d-ea8ea9b9fe95
+
+
 
 
 https://github.com/user-attachments/assets/9d515676-ec9a-4bec-ab3a-135b9c511faa
 
+---
 
+## Gallery
 
-https://github.com/user-attachments/assets/2ce086a1-ba34-4368-8fec-eeab37d5dc80
-
-
-
+### v1
 <p align="center">
-  <img src="resources/image.png" width="45%" />
+  <img src="resources/20250618_191054.jpg" width="45%" />
   <img src="resources/20250221_143342.jpg" width="45%" />
 </p>
-
 
 <p align="center">
   <img src="resources/20250228_143838.jpg" width="45%" />
   <img src="resources/20250216_145429.jpg" width="45%" />
 </p>
 
-
-
-
-## Overview
-An advanced electric vehicle platform featuring torque vectoring, high-speed capabilities (200+ km/h), and comprehensive sensor integration (some features still under development). Built using the ESP-IDF v5.4 toolchain with C++, this project combines sophisticated hardware control with real-time telemetry and sensor fusion.
-
-[//]: # ()
-[//]: # (## Background)
-
-[//]: # (Back in early 2024, we stumbled upon a YouTube video series from [@IndeterminateDesign]&#40;https://www.youtube.com/playlist?list=PLtkERGXE-7yYSD-6eVEBmZx3pTgSMK7Pk&#41; showcasing their hypercar RC project. Like many ambitious projects, it started with that naive thought of "hey, we can do that but better!" Now, a year later&#40;as of February 2025&#41;, after working on-and-off around school commitments, our RC car is just about ready to move under its own power.)
-
-[//]: # ()
-[//]: # (Our approach focused on using cost-effective electronics and sensors and that when it would inevidbly come back to bite us we would be able to solve it "*in software*".)
-
-[//]: # (## Getting Started)
-
-[//]: # ()
-[//]: # (### Prerequisites)
-
-[//]: # (- ESP-IDF v5.4 or newer)
-
-[//]: # (- C++ compiler supporting C++17)
-
-[//]: # (- CMake 3.16+)
-
-[//]: # (- Git with LFS support)
-
-[//]: # (- Python 3.8+)
-
-[//]: # ()
-[//]: # (### Installation)
-
-[//]: # ()
-[//]: # (1. Clone the repository with submodules:)
-
-[//]: # (```bash)
-
-[//]: # (git clone --recursive <link>)
-
-[//]: # (cd <directory>)
-
-[//]: # (git submodule update --init --recursive)
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (2. Configure the build:)
-
-[//]: # (```bash)
-
-[//]: # (idf.py set-target esp32s3)
-
-[//]: # (idf.py menuconfig)
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (3. Build and flash:)
-
-[//]: # (```bash)
-
-[//]: # (idf.py build)
-
-[//]: # (idf.py -p [PORT] flash monitor)
-
-[//]: # (```)
-
-### Project Structure
-```
-├── components/
-│   ├── drivers/        # Hardware interface drivers
-│   ├── sensors/        # Sensor integration modules
-│   └── vehicle/        # Vehicle control systems
-├── main/               # Application entry point
-└── docs/               # Lol
-```
+![Screenshot 2025-04-05 000654](https://github.com/user-attachments/assets/607c7320-3216-4c6f-b9b6-e8d2b640961a)
 
 ---
 
-## Implementation Details
+## Team
 
-### Hardware Specifications
-
-#### Core Components
-- ESP32-S3 microcontroller
-- Four 2300KV BLDC motors (one per wheel)
-- 32-bit ESCs running BLHeli32/AM32 firmware
-  - Bidirectional DSHOT protocol support
-  - Sinusoidal drive capabilities
-- ~750W per wheel (~1hp/wheel)
-- Total vehicle weight: ~2-2.5kg
-
-#### Sensor Suite
-- BN220T GPS module
-- ICM20948 9-axis IMU
-  - Accelerometer, gyroscope, magnetometer
-- FrSky SBUS 16-channel receiver
-- Per-wheel telemetry via bidirectional DSHOT
-
-### Sensor Integration
-
-#### Motion & Position Data
-- GPS: Speed, location, time
-- IMU:
-  - Raw and calibrated gyroscope data
-  - Raw and linear acceleration
-  - 6-axis quaternions (orientation from accelerometer and gyroscope)
-  - 9-axis quaternions (fusion with magnetometer for absolute orientation)
-  - Advanced motion processing
-
-#### Motor Telemetry (per wheel)
-- Real-time RPM monitoring
-- Current consumption
-- ESC temperature
-- Control signal verification
-
-### Development Journey
-
-This project represents over 1000 hours of combined development effort, though not all of this time is reflected in the final implementation. Many hours were invested in exploring various approaches and debugging hardware interfaces. These "dead ends" proved to be valuable learning opportunities, particularly in areas like:
-- UART and SPI peripheral integration without ready-made libraries
-- Custom DSHOT driver development (initially without oscilloscope access)
-- Creative use of a second ESP32 as a makeshift logic analyzer
-- Hardware integration challenges and solutions
-
-### Timeline
-- Early 2024: Project inception, inspired by IndeterminateDesign's hypercar series
-- Spring 2024: Initial CAD design and prototype development
-- Summer 2024: First iteration of physical components, design validation
-- Autumn/Winter 2024: CAD design finalization (excluding body)
-- Winter 2024: Hardware assembly and integration
-- New Year 2024/25: Software development initiation
-- February 1, 2025: Sensor and architecture implementation
-- February 16, 2025: Basic RC control achievement (steering and motor control)
-
-## Authors and Acknowledgments
-
-### Project Team
 - **Aron Cullberg**
-  - Leading software development and hardware integration
-  - Implemented sensor fusion and control systems
-  - Developed custom DSHOT driver implementation
 - **Viktor Hajto**
-  - Leading mechanical design and CAD development
-  - Managed hardware assembly and optimization
-  - Designed and implemented physical components
-
-[//]: # (### Additional Acknowledgments)
-
-[//]: # (- Jonathan Vestin for perspective on FPGA programming challenges and assistance with university 3D printing resources)
-
-[//]: # (- IndeterminateDesign for inspiration through their hypercar project)
-
-[//]: # (- Claude 3.5 Sonnet for development assistance)
-
-[//]: # (<!-- - Open-source community contributors -->)
-
-[//]: # (<!-- - Various repository maintainers whose work contributed to this project -->)

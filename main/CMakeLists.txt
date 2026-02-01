@@ -1,24 +1,20 @@
 idf_component_register(
-    SRCS 
+    SRCS
         "main.cpp"
     INCLUDE_DIRS
         "."
-    REQUIRES         
-        "esp_timer"
-        "freertos"
-        "data_pool"
-        "SBUS"
-        "GPS"
-        "imu"
-        "vdc"
-        "log_monitor"
-        "servo"
-        "ConfigManager"
-        "nvs_flash"
-        "driver"
+    REQUIRES
+        rc
+        servo
+        vehicle
+        voltage_sensor
+        nav
+        proto_nmea
+        imu
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE 
     -fno-rtti  # Disable RTTI
     -fno-exceptions  # Optional: also disable exceptions if not needed
 )
+

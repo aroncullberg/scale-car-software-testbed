@@ -1,13 +1,12 @@
 idf_component_register(
-    SRCS 
+    SRCS
         "imu.cpp"
-    INCLUDE_DIRS 
-        "."
-    REQUIRES         
-        "driver"
-        "freertos"
-        "esp_common"
-        "data_pool"
-        "icm20948"
-        "shared"
+        "backends/bno08x.cpp"
+    INCLUDE_DIRS
+        "include"
+        "backends"
+    REQUIRES
+        myles-parfeniuk__esp32_BNO08x
+        driver
+        esp_timer
 )
