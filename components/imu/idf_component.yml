@@ -1,0 +1,5 @@
+dependencies:
+  idf:
+    version: '>=5.4.0'
+  myles-parfeniuk/esp32_BNO08x:
+    git: "https://github.com/myles-parfeniuk/esp32_BNO08x"

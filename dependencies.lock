@@ -1,10 +1,57 @@
 dependencies:
+  andyfinity/TinyGPSPlus-ESPIDF:
+    component_hash: 369c54045e27d28bb205aed87c124c7d9cec04db004dbbdcb550a80fdab5cfb1
+    dependencies: []
+    source:
+      git: https://github.com/andyfinity/TinyGPSPlus-ESPIDF
+      path: .
+      type: git
+    version: 6e4c7e632746e312f65f1b98cdf380fbf29542ad
+  aroncullberg/ESP_CRSF:
+    component_hash: 79446fe4c771cc66b18e5b3d52b8db1cf6cf2eccbdb41db60560fb3f275c6ac1
+    dependencies: []
+    source:
+      git: https://github.com/aroncullberg/ESP_CRSF
+      path: .
+      type: git
+    version: 9855f7f52ef872739b5ad47671b3c3cb597909e2
+  aroncullberg/EscDriver:
+    component_hash: 3f3e29fd5ed9d1898e4b76b3e73ea45b973f17df7b4dc212364b26139f792375
+    dependencies: []
+    source:
+      git: https://github.com/aroncullberg/DShot-ESP32RMT
+      path: .
+      type: git
+    version: b0e928c635eb343f642ac66682b91d63d8154c39
+  espressif/led_strip:
+    component_hash: 28c6509a727ef74925b372ed404772aeedf11cce10b78c3f69b3c66799095e2d
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 2.5.5
   idf:
     source:
       type: idf
-    version: 5.4.0
+    version: 5.5.1
+  myles-parfeniuk/esp32_BNO08x:
+    component_hash: 21806af3d705753f8da7e15f065ae74ca8c222f5d8ae3155513e1ffa919c73be
+    dependencies: []
+    source:
+      git: https://github.com/myles-parfeniuk/esp32_BNO08x
+      path: .
+      type: git
+    version: d78f6e5c47f54fe45833b6735ad91e0c08b402dd
 direct_dependencies:
+- andyfinity/TinyGPSPlus-ESPIDF
+- aroncullberg/ESP_CRSF
+- aroncullberg/EscDriver
+- espressif/led_strip
 - idf
-manifest_hash: 8c01c3403862f81113d2f989ff207a60f2a2e692d34bbc83cacefce04265d1b1
+- myles-parfeniuk/esp32_BNO08x
+manifest_hash: 0c1709eeb612c677dabff00bf8e63109a28aa9b4066b8dc837e4b2e352fd2c09
 target: esp32s3
 version: 2.0.0
