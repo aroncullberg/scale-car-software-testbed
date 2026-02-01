@@ -6,6 +6,11 @@ A custom-built RC car platform using an ESP32-S3 as an intermediary between driv
 
 ## Current Build (v2)
 
+
+https://github.com/user-attachments/assets/050e3909-3963-4be1-b021-e00b1998f8f5
+
+
+
 <img width="1076" height="982" alt="Screenshot 2025-11-30 at 18 14 50" src="https://github.com/user-attachments/assets/4eff5949-56ff-45be-8be8-315482bfbba7" />
 
 <p align="center">
@@ -13,14 +18,12 @@ A custom-built RC car platform using an ESP32-S3 as an intermediary between driv
   <img src="resources/Gearbox_2_Stage_v61_6.png" width="45%" alt="V2 front angle" />
 </p>
 
+![img.png](resources/img.png)
 
-
-
-https://github.com/user-attachments/assets/fe65e64a-15ae-4bb7-b17b-789cece0033f
 
 <p align="center">
-  <img src="resources/p1.png" width="45%" />
-  <img src="resources/p2.png" width="45%" />
+  <img src="resources/Screenshot 2026-02-01 at 20.09.10.png" width="45%" />
+  <img src="resources/Screenshot 2026-02-01 at 20.09.19.png" width="45%" />
 </p>
 
 ### Why v2?
@@ -68,13 +71,20 @@ External ESP-IDF components used in this project:
 ## Demo
 https://github.com/user-attachments/assets/290ff5f4-501e-493e-9871-947214888d34
 
+<table>
+<tr>
+<td width="50%">
+
 https://github.com/user-attachments/assets/98f6a3cb-3de6-45b8-ba74-e7486755f528
 
+</td>
+<td width="50%">
 
 https://github.com/user-attachments/assets/8f9d8ff1-3977-4885-bc6d-ea8ea9b9fe95
 
-
-
+</td>
+</tr>
+</table>
 
 https://github.com/user-attachments/assets/9d515676-ec9a-4bec-ab3a-135b9c511faa
 
