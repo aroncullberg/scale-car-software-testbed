@@ -17,15 +17,19 @@ if(NOT DEFINED ENV{SDKCONFIG})
   set(ENV{SDKCONFIG} ${CMAKE_SOURCE_DIR}/sdkconfig.vehicle)
 endif()
 
+#set(EXTRA_COMPONENT_DIRS
+# ...
+# ...
+#)
 
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+include(
+        $ENV{IDF_PATH}/tools/cmake/project.cmake
+#        ${CMAKE_SOURCE_DIR}/managed_components/joltwallet__littlefs/project_include.cmake
+)
+
 set(MINIMUM_ESP_IDF_VERSION "v5.4")
 
 project(fulltech)
 
-add_custom_target(build_flash_monitor
-        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target app
-        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target flash
-        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target monitor
-        COMMENT "Building, flashing and monitoring..."
-)
+#littlefs_create_partition_image(storage ${CMAKE_CURRENT_SOURCE_DIR}/components/dashboard/static FLASH_IN_PROJECT)
+

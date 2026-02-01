@@ -2,17 +2,7 @@
 #include "servo.h"
 #include <algorithm>
 
-// TODO: figure out what should be in constuctor(?) and what should be in init
 Servo::Servo(const Config& config) : config_(config) {
-    // TODO: Clamp this value to a resnoable range
-    invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
-    offset_ = ConfigManager::instance().getInt("servo/offset", offset_);
-    // range_ = ConfigManager::instance().getInt("servo/range", range_);
-
-
-    callback_ = [this] { this->updateFromConfig(); };
-    ConfigManager::instance().registerCallback(callback_);
-
     init();
 }
 
@@ -29,7 +19,6 @@ Servo::~Servo() {
     if (timer_) {
         mcpwm_del_timer(timer_);
     }
-    ConfigManager::instance().unregisterCallback(&callback_);
 }
 
 esp_err_t Servo::init() {
@@ -118,33 +107,13 @@ esp_err_t Servo::init() {
     return ESP_OK;
 }
 
-void Servo::updateFromConfig() {
-    bool new_invert_steering_ = ConfigManager::instance().getBool("servo/inv_steer", invert_steering_);
-    if (new_invert_steering_ != invert_steering_) {
-        ESP_LOGI(TAG, "Invert steering changed: %d -> %d",
-                 invert_steering_, new_invert_steering_);
-        invert_steering_ = new_invert_steering_;
-    }
-    int new_offset_ = ConfigManager::instance().getInt("servo/offset", offset_);
-    if (new_offset_ != offset_) {
-        ESP_LOGI(TAG, "Offset changed: %d -> %d",
-                 offset_, new_offset_);
-        offset_ = new_offset_;
-    }
-    int new_range = ConfigManager::instance().getInt("servo/range", range_);
-    if (new_range != range_) {
-        ESP_LOGI(TAG, "Range changed: %d -> %d",
-                 range_, new_range);
-        range_ = new_range;
-    }
-}
 
 
 
-uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
+uint32_t Servo::calculateCompareValue(const rclink::channel_value_t position) {
     if (position > 2000) {
-        ESP_LOGW(TAG, "Position out of range: %u setting servo to FAILSAFE_POSITION", position);
-        return std::clamp(sensor::Servo::FAILSAFE_POSITION + static_cast<uint32_t>(offset_),
+        ESP_LOGW(TAG, "Position out of range: %u setting servo to failsafe position", position);
+        return std::clamp(static_cast<uint32_t>(config_.failsafe_position) + static_cast<uint32_t>(offset_),
                           static_cast<uint32_t>(config_.min_pulse_width_us),
                           static_cast<uint32_t>(config_.max_pulse_width_us));
     }
@@ -154,19 +123,13 @@ uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
     //     range_ = std::clamp(range_, 0, 75);
     // }
 
-    if (range_ < 0 || range_ > 75) {
-        ESP_LOGW(TAG, "Range out of bounds: %d, setting to default 20%%", range_);
-        range_ = 20;
-    }
-
-
-    constexpr int32_t symmetric_offset = (sensor::Servo::MAX_POSITION - sensor::Servo::MIN_POSITION) / 2;
+    constexpr int32_t symmetric_offset = (2000 - 0) / 2; // RC channel range is 0-2000
 
     const int32_t normalized_position = static_cast<int32_t>(position) - symmetric_offset;
 
-    const int32_t scaled_position = normalized_position * range_ / 100;
+    const int32_t scaled_position = (normalized_position - 100)/ 2 * range_ / 100;
 
-    uint32_t pulse_width = center_pulse_width_us_ + offset_ + scaled_position;
+    uint32_t pulse_width = center_pulse_width_us_ + offset_ + scaled_position; // Offset doesn't do anything anymore, but it's there for legacy (read: im lazy)
 
     if (invert_steering_) {
         pulse_width = config_.min_pulse_width_us + config_.max_pulse_width_us - pulse_width;
@@ -177,13 +140,77 @@ uint32_t Servo::calculateCompareValue(const sensor::channel_t position) {
     return std::clamp(pulse_width, static_cast<uint32_t>(config_.min_pulse_width_us), static_cast<uint32_t>(config_.max_pulse_width_us));
 }
 
-esp_err_t Servo::setPosition(const sensor::channel_t position)  {
-    // // print every tenth call
-    // static uint32_t call_count = 0;
-    // if (call_count++ % 10 == 0) {
-    //     ESP_LOGI(TAG, "Setting servo position: %u", position);
-    // }
-    // // ESP_LOGI(TAG, "Setting servo position: %ld", calculateCompareValue(position));
-    // return ESP_OK;
+esp_err_t Servo::setPosition(const rclink::channel_value_t position)  {
+    if (!enabled_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    // ESP_LOGI(TAG, "Setting servo position: %d", calculateCompareValue(position));
     return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
+}
+
+// Runtime configuration methods
+esp_err_t Servo::setCenterPoint(uint16_t center_us) {
+    if (center_us < config_.min_pulse_width_us || center_us > config_.max_pulse_width_us) {
+        ESP_LOGW(TAG, "Center point %u out of range [%d, %d]", center_us, config_.min_pulse_width_us, config_.max_pulse_width_us);
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (center_us != center_pulse_width_us_) {
+        center_pulse_width_us_ = center_us;
+        ESP_LOGI(TAG, "Center point updated to %u us", center_us);
+    }
+    return ESP_OK;
+}
+
+esp_err_t Servo::setLimits(uint16_t min_us, uint16_t max_us) {
+    if (min_us >= max_us) {
+        ESP_LOGW(TAG, "Invalid limits: min %u >= max %u", min_us, max_us);
+        return ESP_ERR_INVALID_ARG;
+    }
+    config_.min_pulse_width_us = min_us;
+    config_.max_pulse_width_us = max_us;
+    ESP_LOGI(TAG, "Limits updated to [%u, %u] us", min_us, max_us);
+    return ESP_OK;
+}
+
+esp_err_t Servo::setRange(int range_percent) {
+    if (range_percent < 0 || range_percent > 100) {
+        ESP_LOGW(TAG, "Range %d%% out of bounds [0, 100]", range_percent);
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (range_percent != range_) {
+        range_ = range_percent;
+        ESP_LOGI(TAG, "Range updated to %d%%", range_percent);
+    }
+    return ESP_OK;
+}
+
+esp_err_t Servo::setOffset(int offset_us) {
+    offset_ = offset_us;
+    ESP_LOGI(TAG, "Offset updated to %d us", offset_us);
+    return ESP_OK;
+}
+
+esp_err_t Servo::setInvert(bool invert) {
+    invert_steering_ = invert;
+    ESP_LOGI(TAG, "Invert updated to %s", invert ? "true" : "false");
+    return ESP_OK;
+}
+
+esp_err_t Servo::setFailsafe() {
+    return setPosition(config_.failsafe_position);
+}
+
+// Safety methods
+esp_err_t Servo::enable() {
+    enabled_ = true;
+    ESP_LOGI(TAG, "Servo enabled");
+    return ESP_OK;
+}
+
+esp_err_t Servo::disable() {
+    enabled_ = false;
+    // Set to failsafe position when disabled
+    esp_err_t ret = mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(config_.failsafe_position));
+    ESP_LOGI(TAG, "Servo disabled, set to failsafe position");
+    return ret;
 }
