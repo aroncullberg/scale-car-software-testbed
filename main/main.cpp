@@ -28,19 +28,21 @@
  * Prints first 8 RC channels (scaled 0-2000) and IMU data on a single line.
  * Format: CH1-8 | Accel XYZ | Gyro XYZ | Roll Pitch Yaw
  */
+// Convert IMU accuracy enum to string
+static const char* accuracy_str(imu::Accuracy acc) {
+    switch (acc) {
+        case imu::Accuracy::UNRELIABLE: return "---";
+        case imu::Accuracy::LOW:        return "LOW";
+        case imu::Accuracy::MEDIUM:     return "MED";
+        case imu::Accuracy::HIGH:       return "HI ";
+        default:                        return "???";
+    }
+}
+
 void logger_task(void* pvParameters)
 {
-    // Print header once
     vTaskDelay(pdMS_TO_TICKS(10000));
     printf("\n");
-    printf("RC: CH1  CH2  CH3  CH4  CH5  CH6  CH7  CH8  | "
-           "Accel:    X       Y       Z    | "
-           "Gyro:    X       Y       Z    | "
-           "Euler: Roll   Pitch    Yaw\n");
-    printf("─────────────────────────────────────────────────"
-           "─────────────────────────────────"
-           "─────────────────────────────────"
-           "──────────────────────────────\n");
 
     uint32_t cycle_count = 0;
 
@@ -48,37 +50,37 @@ void logger_task(void* pvParameters)
         cycle_count++;
 
         auto ch = rclink::Receiver::instance().get_channels();
-        auto accel = imu::IMU::instance().get_accel();
-        auto gyro = imu::IMU::instance().get_gyro();
         auto euler = imu::IMU::instance().get_euler();
+        auto sat = nav::Gps::instance().getSatellite();
+        auto loc = nav::Gps::instance().getLocation();
+        auto hdop = nav::Gps::instance().getHDOP();
 
-        // RC channels (4 chars each, 0-2000)
-        printf("   %4d %4d %4d %4d %4d %4d %4d %4d  | ",
+        // Line 1: RC channels + Heading
+        printf("RC: %4d %4d %4d %4d %4d %4d %4d %4d | ",
                ch.ch1.scaled, ch.ch2.scaled, ch.ch3.scaled, ch.ch4.scaled,
                ch.ch5.scaled, ch.ch6.scaled, ch.ch7.scaled, ch.ch8.scaled);
 
-        // Accel (m/s², 7 chars each with sign and 2 decimals)
-        if (accel.valid) {
-            printf("     %7.2f %7.2f %7.2f  | ", accel.x_ms2, accel.y_ms2, accel.z_ms2);
-        } else {
-            printf("        --      --      --  | ");
-        }
-
-        // Gyro (rad/s, 7 chars each with sign and 3 decimals)
-        if (gyro.valid) {
-            printf("     %7.3f %7.3f %7.3f  | ", gyro.x_rads, gyro.y_rads, gyro.z_rads);
-        } else {
-            printf("        --      --      --  | ");
-        }
-
-        // Euler (degrees, 7 chars each with sign and 1 decimal)
+        // Heading with accuracy
         if (euler.valid) {
-            printf("     %7.1f %7.1f %7.1f", euler.roll_deg, euler.pitch_deg, euler.yaw_deg);
+            float heading = fmodf(euler.yaw_deg, 360.0f);
+            if (heading < 0) heading += 360.0f;
+            printf("HDG: %5.1f [%s] | ", heading, accuracy_str(euler.accuracy));
         } else {
-            printf("        --      --      --");
+            printf("HDG:   --- [---] | ");
         }
 
-        printf("\r");
+        // GPS status
+        printf("GPS: %2" PRIu32 " sats ", sat.satellites);
+        if (loc.isValid) {
+            // Convert from 1e7 format to degrees
+            float lat = loc.lat_e7 / 10000000.0f;
+            float lon = loc.lon_e7 / 10000000.0f;
+            printf("FIX  %9.5f, %9.5f  HDOP:%3u", lat, lon, hdop);
+        } else {
+            printf("NO FIX");
+        }
+
+        printf("        \r");
         fflush(stdout);
 
         // Send attitude telemetry every 10 cycles (1 second at 10Hz)
@@ -117,27 +119,27 @@ extern "C" void app_main(void)
 
     ESP_LOGI(TAG, "RC auto-detection successful! )NEW=SÖLKDFJ");
 
-    // static imu::BNO08xBackend imu_backend;
-    //
-    // imu::SpiConfig imu_spi_cfg = {
-    //     .mosi_pin = GPIO_NUM_11,
-    //     .miso_pin = GPIO_NUM_13,
-    //     .sclk_pin = GPIO_NUM_12,
-    //     .cs_pin = GPIO_NUM_10,
-    //     .int_pin = GPIO_NUM_14,
-    //     .rst_pin = GPIO_NUM_9,
-    //     .host = SPI2_HOST,
-    //     .clock_speed_hz = 3000000
-    // };
-    // ESP_LOGI(TAG, "SPI auto-detection successful!");
-    // // 400Hz gyro/accel for dynamics control, 50Hz quaternion for heading
-    // result = imu_backend.start(imu_spi_cfg, 2500, 2500, 20000);
-    // ESP_LOGI(TAG, "imu backend started");
-    // if (result != ESP_OK) {
-    //     ESP_LOGW(TAG, "IMU init failed: %s (continuing without it)", esp_err_to_name(result));
-    // } else {
-    //     ESP_LOGI(TAG, "IMU started");
-    // }
+    static imu::BNO08xBackend imu_backend;
+
+    imu::SpiConfig imu_spi_cfg = {
+        .mosi_pin = GPIO_NUM_11,
+        .miso_pin = GPIO_NUM_13,
+        .sclk_pin = GPIO_NUM_12,
+        .cs_pin = GPIO_NUM_10,
+        .int_pin = GPIO_NUM_14,
+        .rst_pin = GPIO_NUM_9,
+        .host = SPI2_HOST,
+        .clock_speed_hz = 3000000
+    };
+    ESP_LOGI(TAG, "SPI auto-detection successful!");
+    // 400Hz gyro/accel for dynamics control, 50Hz quaternion for heading
+    result = imu_backend.start(imu_spi_cfg, 2500, 2500, 20000);
+    ESP_LOGI(TAG, "imu backend started");
+    if (result != ESP_OK) {
+        ESP_LOGW(TAG, "IMU init failed: %s (continuing without it)", esp_err_to_name(result));
+    } else {
+        ESP_LOGI(TAG, "IMU started");
+    }
 
     // VoltageSensor::Config voltage_config = {
     //     .adc_channel = ADC_CHANNEL_4,   // ADC1_CHANNEL_4
@@ -150,7 +152,7 @@ extern "C" void app_main(void)
     //     .telemetry_interval_ms = 0,
     //     .battery_capacity_mah = 0
     // };
-    //
+
     // result = VoltageSensor::instance().init(voltage_config);
     // if (result != ESP_OK) {
     //     ESP_LOGW(TAG, "Voltage sensor init failed: %s (continuing without it)", esp_err_to_name(result));
@@ -164,33 +166,33 @@ extern "C" void app_main(void)
     // ========================================
     // Step 1.6: Setup GPS/NMEA Driver
     // ========================================
-    // proto::NmeaDriver::Config nmea_config = {
-    //     .uart_num = UART_NUM_2,
-    //     .uart_tx_pin = GPIO_NUM_17,      // TX pin (GPS RX)
-    //     .uart_rx_pin = GPIO_NUM_18,     // RX pin (GPS TX)
-    //     .buad_rate = 38400,              // Standard GPS baud rate
-    //     .rx_buffer_size = 2048,
-    //     .tx_buffer_size = 0,
-    //     .pattern_queue_size = 16,
-    //     .task_stack_size = 4096,
-    //     .task_priority = 5,
-    //     .tick_period = pdMS_TO_TICKS(20)
-    // };
-    //
-    // static proto::NmeaDriver nmea_driver(nmea_config);
-    // result = nmea_driver.init();
-    // if (result != ESP_OK) {
-    //     ESP_LOGW(TAG, "NMEA driver init failed: %s (continuing without it)", esp_err_to_name(result));
-    // } else {
-    //     result = nmea_driver.start();
-    //     if (result == ESP_OK) {
-    //         ESP_LOGI(TAG, "NMEA driver started");
-    //     }
-    // }
+    proto::NmeaDriver::Config nmea_config = {
+        .uart_num = UART_NUM_2,
+        .uart_tx_pin = GPIO_NUM_2,      // TX pin (GPS RX)
+        .uart_rx_pin = GPIO_NUM_42,     // RX pin (GPS TX)
+        .buad_rate = 38400,              // Standard GPS baud rate
+        .rx_buffer_size = 2048,
+        .tx_buffer_size = 0,
+        .pattern_queue_size = 16,
+        .task_stack_size = 4096,
+        .task_priority = 5,
+        .tick_period = pdMS_TO_TICKS(20)
+    };
 
-    // ========================================
-    // Start Logger Task
-    // ========================================
+    static proto::NmeaDriver nmea_driver(nmea_config);
+    result = nmea_driver.init();
+    if (result != ESP_OK) {
+        ESP_LOGW(TAG, "NMEA driver init failed: %s (continuing without it)", esp_err_to_name(result));
+    } else {
+        result = nmea_driver.start();
+        if (result == ESP_OK) {
+            ESP_LOGI(TAG, "NMEA driver started");
+        }
+    }
+
+    // // ========================================
+    // // Start Logger Task
+    // // ========================================
     BaseType_t logger_task_result = xTaskCreate(
         logger_task,
         "logger",
@@ -211,7 +213,7 @@ extern "C" void app_main(void)
     // ========================================
 
     Servo::Config servo_cfg = {
-        .gpio_num = GPIO_NUM_21,
+        .gpio_num = GPIO_NUM_47,
         .min_pulse_width_us = 1000,
         .max_pulse_width_us = 2000,
         .freq_hz = 50,
@@ -220,10 +222,10 @@ extern "C" void app_main(void)
 
     static Servo steering_servo(servo_cfg);
 
-    static DShotRMT motor_fl(GPIO_NUM_2, DSHOT600_BIDIRECTIONAL);
-    static DShotRMT motor_fr(GPIO_NUM_41, DSHOT600_BIDIRECTIONAL);
+    static DShotRMT motor_fl(GPIO_NUM_38, DSHOT600_BIDIRECTIONAL);
+    static DShotRMT motor_fr(GPIO_NUM_39, DSHOT600_BIDIRECTIONAL);
     static DShotRMT motor_rl(GPIO_NUM_40, DSHOT600_BIDIRECTIONAL);
-    static DShotRMT motor_rr(GPIO_NUM_42, DSHOT600_BIDIRECTIONAL);
+    static DShotRMT motor_rr(GPIO_NUM_41, DSHOT600_BIDIRECTIONAL);
 
     ESP_LOGI(TAG, "Initializing motors...");
     motor_fl.begin_UNSAFE();

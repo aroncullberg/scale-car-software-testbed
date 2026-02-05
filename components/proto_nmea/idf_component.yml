@@ -3,5 +3,6 @@ dependencies:
     version: '>=5.5.0'
   andyfinity/TinyGPSPlus-ESPIDF:
     git: "https://github.com/andyfinity/TinyGPSPlus-ESPIDF"
+    version: "*"
 
 

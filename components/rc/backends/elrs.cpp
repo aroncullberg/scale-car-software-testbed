@@ -3,7 +3,6 @@
 //
 
 #include "elrs.h"
-#include "rgb_led.h"
 
 extern "C" {
     #include "ESP_CRSF.h"
@@ -130,41 +129,18 @@ void ExpressLRS::run()
     crsf_channels_t channels = {};
     TickType_t last_wake_time = xTaskGetTickCount();
     bool was_valid = false;
-    bool was_armed = false;
     uint32_t valid_frames = 0;
     uint32_t invalid_frames = 0;
-
-    // Arming threshold: CH2 >= 1500 (11-bit center ~992) means armed
-    constexpr uint16_t ARM_THRESHOLD = 992;  // Center point in 11-bit CRSF
-
-    ESP_LOGI(TAG, "ExpressLRS run loop started (CH2 arming threshold: %d)", ARM_THRESHOLD);
 
     while (true) {
         esp_err_t result = CRSF_receive_channels(&channels);
 
         if (result == ESP_OK) {
-            // Link is active and data is fresh
             valid_frames++;
 
-            // Check arming status from CH2 (ELRS standard)
-            bool armed = (channels.ch5 >= ARM_THRESHOLD);
-
-            // Handle link state transition
             if (!was_valid) {
                 ESP_LOGI(TAG, "✓ RC link established (valid=%lu, invalid=%lu)", valid_frames, invalid_frames);
                 was_valid = true;
-            }
-
-            // Handle arming state transition
-            if (armed != was_armed) {
-                if (armed) {
-                    // ESP_LOGI(TAG, "✓ ARMED (CH2: %d >= %d)", channels.ch2, ARM_THRESHOLD);
-                    led::Rgb::instance().set_color(0, 255, 0);  // Green = armed
-                } else {
-                    // ESP_LOGI(TAG, "✓ DISARMED (CH2: %d < %d)", channels.ch2, ARM_THRESHOLD);
-                    led::Rgb::instance().set_color(0, 0, 255);  // Blue = disarmed
-                }
-                was_armed = armed;
             }
 
             set_valid_data(true);
@@ -189,9 +165,8 @@ void ExpressLRS::run()
 
             // Log channel values periodically (every 100 valid frames)
             if (valid_frames % 100 == 0) {
-                ESP_LOGD(TAG, "Channels: ch1=%d ch2=%d ch3=%d ch4=%d (raw, armed=%s)",
-                         channels.ch1, channels.ch2, channels.ch3, channels.ch4,
-                         armed ? "yes" : "no");
+                ESP_LOGD(TAG, "Channels: ch1=%d ch2=%d ch3=%d ch4=%d",
+                         channels.ch1, channels.ch2, channels.ch3, channels.ch4);
             }
         }
         else if (result == ESP_ERR_TIMEOUT) {
@@ -200,9 +175,7 @@ void ExpressLRS::run()
 
             if (was_valid) {
                 ESP_LOGW(TAG, "✗ RC link lost (valid=%lu, invalid=%lu)", valid_frames, invalid_frames);
-                led::Rgb::instance().set_color(255, 0, 0);  // Red = no link
                 was_valid = false;
-                was_armed = false;  // Reset arming state on link loss
             }
 
             set_valid_data(false);

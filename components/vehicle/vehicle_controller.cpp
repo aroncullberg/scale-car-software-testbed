@@ -76,7 +76,7 @@ void Controller::control_task_entry(void* arg) {
 
         // Check RC data validity
         if (!rclink::Receiver::instance().valid_data()) {
-            ESP_LOGI(TAG, "receiver timeout");
+            // ESP_LOGI(TAG, "receiver timeout");
             handle_rc_loss();
             vTaskDelayUntil(&last_wake_time, frequency);
             continue;

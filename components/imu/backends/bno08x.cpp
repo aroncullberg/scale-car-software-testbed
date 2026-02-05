@@ -6,7 +6,6 @@
 #include "imu.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include <cmath>
 
 namespace imu
 {
@@ -97,13 +96,6 @@ esp_err_t BNO08xBackend::start(const SpiConfig& spi,
             ESP_LOGE(TAG, "failed to enable rotation vector report");
             return ESP_FAIL;
         }
-        ESP_LOGI(TAG, "rotation vector enabled, attempting to do rotation stuff");
-        if (!sensor_->set_system_orientation(BNO08x::SQRT2OVER2, 0.0f, 0.0f, BNO08x::SQRT2OVER2)) {
-            ESP_LOGW(TAG, "failed to set system orientation (continuing anyway)");
-        }
-
-        sensor_->soft_reset();
-
         sensor_->rpt.rv.register_cb([this]() { handle_quat(); });
         ESP_LOGI(TAG, "rotation vector enabled at %lu us interval", quat_interval_us);
     }
@@ -189,15 +181,13 @@ void BNO08xBackend::handle_quat()
     push_quat(quat);
 
     // Push euler (derived from quaternion by BNO08x library)
-    // Note: BNO08x euler is in radians, we convert to degrees
-    constexpr float RAD_TO_DEG = 180.0f / 3.14159265358979323846f;
-
+    // Note: get_euler() returns degrees by default
     EulerData euler{};
-    euler.roll_deg = euler_data.x * RAD_TO_DEG;
-    euler.pitch_deg = euler_data.y * RAD_TO_DEG;
-    euler.yaw_deg = euler_data.z * RAD_TO_DEG;
-    euler.accuracy_rad = euler_data.rad_accuracy;
-    euler.accuracy = convert_accuracy(euler_data.accuracy);
+    euler.roll_deg = euler_data.x;
+    euler.pitch_deg = euler_data.y;
+    euler.yaw_deg = euler_data.z;
+    euler.accuracy_rad = quat_data.rad_accuracy;  // Use quat accuracy (euler's gets corrupted by deg conversion)
+    euler.accuracy = convert_accuracy(quat_data.accuracy);
     euler.timestamp_us = now;
     euler.valid = true;
 

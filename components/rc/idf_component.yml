@@ -3,3 +3,4 @@ dependencies:
     version: '>=5.5.0'
   aroncullberg/ESP_CRSF:
     git: "https://github.com/aroncullberg/ESP_CRSF"
+    version: "*"

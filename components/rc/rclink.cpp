@@ -10,6 +10,7 @@
 #include "channel_types.h"
 #include "backends/elrs.h"
 #include "backends/sbus.h"
+#include "rgb_led.h"
 
 using namespace rclink;
 
@@ -66,12 +67,13 @@ void Backend::set_valid_data(bool valid) const
     bool previous = Receiver::instance().valid_data();
     Receiver::instance().set_valid_data(valid);
 
-    // Log state transitions
     if (previous != valid) {
         if (valid) {
-            ESP_LOGI(tag, "RC data valid (backend notified link active)");
+            led::Rgb::instance().set_color(0, 0, 255);
+            ESP_LOGI(tag, "RC data valid");
         } else {
-            ESP_LOGW(tag, "RC data invalid (backend notified link lost)");
+            led::Rgb::instance().set_color(255, 0, 0);
+            ESP_LOGW(tag, "RC data invalid");
         }
     }
 }
@@ -82,6 +84,8 @@ esp_err_t Receiver::setup(const uart_pins_t& pins, const ReceiverConfig& config)
         ESP_LOGE(tag, "setup() called but backend already registered");
         return ESP_ERR_INVALID_STATE;
     }
+
+    led::Rgb::instance().set_color(255, 0, 0);
 
     ESP_LOGI(tag, "Starting RC auto-detection on UART%d (RX: %d, TX: %d)",
              pins.uart_num, pins.rx_pin, pins.tx_pin);
@@ -100,22 +104,18 @@ esp_err_t Receiver::setup(const uart_pins_t& pins, const ReceiverConfig& config)
         for (size_t i = 0; i < sizeof(backends) / sizeof(backends[0]); ++i) {
             ESP_LOGD(tag, "Trying %s protocol...", protocol_names[i]);
 
-            // Register backend before trying to start it
             backend_ = backends[i];
 
             esp_err_t result = backends[i]->start(pins, config.per_protocol_timeout_ms);
             if (result == ESP_OK) {
                 ESP_LOGI(tag, "RC setup complete with %s protocol", protocol_names[i]);
-                // LED state is now managed by RC backend based on link status and arming
                 return ESP_OK;
             }
 
             ESP_LOGW(tag, "Failed to detect %s", protocol_names[i]);
 
-            // Deregister failed backend
             backend_ = nullptr;
         }
-        // No delay - immediately retry with next protocol
     }
 }
 
