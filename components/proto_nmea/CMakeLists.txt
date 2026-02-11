@@ -3,6 +3,6 @@ idf_component_register(
         INCLUDE_DIRS
             "include"
         REQUIRES andyfinity__TinyGPSPlus-ESPIDF
-        PRIV_REQUIRES driver freertos nav shared
+        PRIV_REQUIRES driver freertos nav shared telemetry
 )
 

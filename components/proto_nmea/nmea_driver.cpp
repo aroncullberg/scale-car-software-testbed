@@ -9,6 +9,7 @@
 #include "esp_log.h"
 
 #include "gps.h"
+#include "telemetry.h"
 
 #include "nmea_driver.h"
 
@@ -176,6 +177,12 @@ namespace proto
 
             ingest(buf, static_cast<size_t>(len));
 
+            {
+                telemetry::FlightModeTelemetry fm{};
+                snprintf(fm.mode, sizeof(fm.mode), "P:%u", (unsigned)gps_.passedChecksum());
+                telemetry::publish(fm);
+            }
+
             if (gps_.location.isUpdated()) {
                 // ESP_LOGI(TAG, "Location updated");
                 location.age = gps_.location.age();
@@ -185,6 +192,16 @@ namespace proto
                 // ESP_LOGI(TAG, "\tLocation lon: %ld", location.lon_e7);
                 location.isValid = gps_.location.isValid();
                 Gps::instance().setLocation(location);
+
+                telemetry::GpsTelemetry telem = {
+                    .latitude_1e7 = location.lat_e7,
+                    .longitude_1e7 = location.lon_e7,
+                    .speed_kmh = static_cast<uint16_t>(speed.speed_kmph),
+                    .heading_deg = static_cast<uint16_t>(course.course_cd / 100),
+                    .altitude_m = static_cast<uint16_t>(altitude.altitude_m),
+                    .satellites = static_cast<uint8_t>(satellites.satellites),
+                };
+                telemetry::publish(telem);
             }
 
             if (gps_.date.isUpdated()) {
