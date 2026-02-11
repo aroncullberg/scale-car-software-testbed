@@ -7,10 +7,11 @@ idf_component_register(
         rc
         servo
         vehicle
-        voltage_sensor
+        power_monitor
         nav
         proto_nmea
         imu
+        telemetry
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE 
