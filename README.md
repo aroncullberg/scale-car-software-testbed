@@ -111,3 +111,4 @@ https://github.com/user-attachments/assets/9d515676-ec9a-4bec-ab3a-135b9c511faa
 
 - **Aron Cullberg**
 - **Viktor Hajto**
+- <sup>**Claude** — responsible for writing commit messages, otherwise they would all say "..."</sup>
