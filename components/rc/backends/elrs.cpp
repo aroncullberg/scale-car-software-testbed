@@ -3,6 +3,7 @@
 //
 
 #include "elrs.h"
+#include "telemetry.h"
 
 extern "C" {
     #include "ESP_CRSF.h"
@@ -168,6 +169,33 @@ void ExpressLRS::run()
                 ESP_LOGD(TAG, "Channels: ch1=%d ch2=%d ch3=%d ch4=%d",
                          channels.ch1, channels.ch2, channels.ch3, channels.ch4);
             }
+
+            // Poll telemetry dispatcher and send to RC link (~100ms interval)
+            if (valid_frames % 10 == 0) {
+                telemetry::AttitudeTelemetry att;
+                if (telemetry::poll_latest(att)) send_attitude(att);
+                telemetry::RpmTelemetry rpm;
+                if (telemetry::poll_latest(rpm)) {
+                    // ESP_LOGI(TAG, "RPM telem polled: [%ld, %ld, %ld, %ld] count=%d",
+                    //          rpm.rpm_values[0], rpm.rpm_values[1],
+                    //          rpm.rpm_values[2], rpm.rpm_values[3], rpm.count);
+                    send_rpm(rpm);
+                } else {
+                    ESP_LOGD(TAG, "RPM telem poll: no data");
+                }
+                telemetry::BatteryTelemetry bat;
+                if (telemetry::poll_latest(bat)) send_battery(bat);
+                telemetry::GpsTelemetry gps;
+                if (telemetry::poll_latest(gps)) send_gps(gps);
+                telemetry::AirspeedTelemetry aspd;
+                if (telemetry::poll_latest(aspd)) send_airspeed(aspd);
+                telemetry::FlightModeTelemetry fm;
+                if (telemetry::poll_latest(fm)) send_flight_mode(fm);
+                telemetry::TempTelemetry tmp;
+                if (telemetry::poll_latest(tmp)) send_temp(tmp);
+                telemetry::AccelGyroTelemetry ag;
+                if (telemetry::poll_latest(ag)) send_accelgyro(ag);
+            }
         }
         else if (result == ESP_ERR_TIMEOUT) {
             // Link lost - data is stale
@@ -189,7 +217,7 @@ void ExpressLRS::run()
     }
 }
 
-esp_err_t ExpressLRS::send_battery(const rclink::BatteryTelemetry& data) const
+esp_err_t ExpressLRS::send_battery(const telemetry::BatteryTelemetry& data) const
 {
     if (!running_) {
         ESP_LOGW(TAG, "Cannot send battery telemetry - ELRS not running");
@@ -208,28 +236,27 @@ esp_err_t ExpressLRS::send_battery(const rclink::BatteryTelemetry& data) const
     return ESP_OK;
 }
 
-esp_err_t ExpressLRS::send_gps(const rclink::GpsTelemetry& data) const
+esp_err_t ExpressLRS::send_gps(const telemetry::GpsTelemetry& data) const
 {
     if (!running_) {
         ESP_LOGW(TAG, "Cannot send GPS telemetry - ELRS not running");
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Convert to CRSF format
     crsf_gps_t crsf_gps = {
-        .latitude = data.latitude_1e7,     // Already in correct format
-        .longitude = data.longitude_1e7,   // Already in correct format
-        .groundspeed = data.speed_kmh,     // Already in km/h * 10
-        .heading = data.heading_deg,       // Already in degrees * 100
-        .altitude = data.altitude_m,       // Already with +1000m offset
-        .satellites = data.satellites      // Satellite count
+        .latitude = data.latitude_1e7,
+        .longitude = data.longitude_1e7,
+        .groundspeed = data.speed_kmh,
+        .heading = data.heading_deg,
+        .altitude = data.altitude_m,
+        .satellites = data.satellites
     };
 
     CRSF_send_gps_data(CRSF_DEST_FC, &crsf_gps);
     return ESP_OK;
 }
 
-esp_err_t ExpressLRS::send_attitude(const rclink::AttitudeTelemetry& data) const
+esp_err_t ExpressLRS::send_attitude(const telemetry::AttitudeTelemetry& data) const
 {
     if (!running_) {
         ESP_LOGW(TAG, "Cannot send attitude telemetry - ELRS not running");
@@ -237,9 +264,6 @@ esp_err_t ExpressLRS::send_attitude(const rclink::AttitudeTelemetry& data) const
     }
 
     // Convert float degrees to int16 with LSB = 100 µrad
-    // 1 radian = 1,000,000 µrad
-    // 1 degree = (π / 180) radians = 17,453.29 µrad
-    // So degrees * 174.5329 = value in units of 100 µrad
     constexpr float deg_to_crsf = 174.5329f;
 
     crsf_attitude_t crsf_attitude = {
@@ -252,14 +276,13 @@ esp_err_t ExpressLRS::send_attitude(const rclink::AttitudeTelemetry& data) const
     return ESP_OK;
 }
 
-esp_err_t ExpressLRS::send_airspeed(const rclink::AirspeedTelemetry& data) const
+esp_err_t ExpressLRS::send_airspeed(const telemetry::AirspeedTelemetry& data) const
 {
     if (!running_) {
         ESP_LOGW(TAG, "Cannot send airspeed telemetry - ELRS not running");
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Convert to CRSF format - data.speed_kmh_x10 is already in 0.1 km/h units
     crsf_airspeed_t crsf_airspeed = {
         .speed = data.speed_kmh_x10
     };
@@ -268,40 +291,67 @@ esp_err_t ExpressLRS::send_airspeed(const rclink::AirspeedTelemetry& data) const
     return ESP_OK;
 }
 
-esp_err_t ExpressLRS::send_flight_mode(const rclink::FlightModeTelemetry& data) const
+esp_err_t ExpressLRS::send_flight_mode(const telemetry::FlightModeTelemetry& data) const
 {
     if (!running_) {
         ESP_LOGW(TAG, "Cannot send flight mode telemetry - ELRS not running");
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Flight mode is just a null-terminated string
     CRSF_send_flight_mode_data(CRSF_DEST_FC, data.mode);
     return ESP_OK;
 }
 
-esp_err_t ExpressLRS::send_temp(const rclink::TempTelemetry& data) const
+esp_err_t ExpressLRS::send_temp(const telemetry::TempTelemetry& data) const
 {
     if (!running_) {
         ESP_LOGW(TAG, "Cannot send temperature telemetry - ELRS not running");
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Temperature data is already in correct format (deci-degrees Celsius)
-    // Just pass it directly to CRSF
     CRSF_send_temp_data(CRSF_DEST_FC, data.source_id, data.temps, data.count);
     return ESP_OK;
 }
 
-esp_err_t ExpressLRS::send_rpm(const rclink::RpmTelemetry& data) const
+esp_err_t ExpressLRS::send_rpm(const telemetry::RpmTelemetry& data) const
 {
     if (!running_) {
         ESP_LOGW(TAG, "Cannot send RPM telemetry - ELRS not running");
         return ESP_ERR_INVALID_STATE;
     }
 
-    // RPM data is passed as int32_t and will be packed as 24-bit by CRSF layer
     CRSF_send_rpm_data(CRSF_DEST_FC, data.source_id, data.rpm_values, data.count);
+    return ESP_OK;
+}
+
+esp_err_t ExpressLRS::send_accelgyro(const telemetry::AccelGyroTelemetry& data) const
+{
+    if (!running_) {
+        ESP_LOGW(TAG, "Cannot send accelgyro telemetry - ELRS not running");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // CRSF gyro: LSB = INT16_MAX / 2000 DPS. Input is rad/s → deg/s * scale.
+    constexpr float rads_to_crsf_gyro = (180.0f / 3.14159265f) * (32767.0f / 2000.0f);
+    // CRSF accel: LSB = INT16_MAX / 16 G. Input is m/s² → G * scale.
+    constexpr float ms2_to_crsf_accel = (1.0f / 9.80665f) * (32767.0f / 16.0f);
+
+    crsf_accelgyro_t crsf_ag = {
+        .sample_time = data.sample_time_us,
+        .gyro_x = static_cast<int16_t>(data.gyro_x_rads * rads_to_crsf_gyro),
+        .gyro_y = static_cast<int16_t>(data.gyro_y_rads * rads_to_crsf_gyro),
+        .gyro_z = static_cast<int16_t>(data.gyro_z_rads * rads_to_crsf_gyro),
+        .acc_x = static_cast<int16_t>(data.accel_x_ms2 * ms2_to_crsf_accel),
+        .acc_y = static_cast<int16_t>(data.accel_y_ms2 * ms2_to_crsf_accel),
+        .acc_z = static_cast<int16_t>(data.accel_z_ms2 * ms2_to_crsf_accel),
+        .gyro_temp = 0
+    };
+
+    ESP_LOGI(TAG, "accelgyro t=%lu gx=%d gy=%d gz=%d ax=%d ay=%d az=%d",
+             crsf_ag.sample_time, crsf_ag.gyro_x, crsf_ag.gyro_y, crsf_ag.gyro_z,
+             crsf_ag.acc_x, crsf_ag.acc_y, crsf_ag.acc_z);
+
+    CRSF_send_accelgyro_data(CRSF_DEST_FC, &crsf_ag);
     return ESP_OK;
 }
 

@@ -54,13 +54,14 @@ namespace proto
         bool supports_telemetry() const override { return true; }
 
         // Telemetry transmission methods
-        esp_err_t send_battery(const rclink::BatteryTelemetry& data) const override;
-        esp_err_t send_gps(const rclink::GpsTelemetry& data) const override;
-        esp_err_t send_attitude(const rclink::AttitudeTelemetry& data) const override;
-        esp_err_t send_airspeed(const rclink::AirspeedTelemetry& data) const override;
-        esp_err_t send_flight_mode(const rclink::FlightModeTelemetry& data) const override;
-        esp_err_t send_temp(const rclink::TempTelemetry& data) const override;
-        esp_err_t send_rpm(const rclink::RpmTelemetry& data) const override;
+        esp_err_t send_battery(const telemetry::BatteryTelemetry& data) const override;
+        esp_err_t send_gps(const telemetry::GpsTelemetry& data) const override;
+        esp_err_t send_attitude(const telemetry::AttitudeTelemetry& data) const override;
+        esp_err_t send_airspeed(const telemetry::AirspeedTelemetry& data) const override;
+        esp_err_t send_flight_mode(const telemetry::FlightModeTelemetry& data) const override;
+        esp_err_t send_temp(const telemetry::TempTelemetry& data) const override;
+        esp_err_t send_rpm(const telemetry::RpmTelemetry& data) const override;
+        esp_err_t send_accelgyro(const telemetry::AccelGyroTelemetry& data) const override;
 
         ExpressLRS(const ExpressLRS&) = delete;
         ExpressLRS& operator=(const ExpressLRS&) = delete;

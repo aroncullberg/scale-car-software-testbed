@@ -119,7 +119,7 @@ esp_err_t Receiver::setup(const uart_pins_t& pins, const ReceiverConfig& config)
     }
 }
 
-esp_err_t Receiver::send_battery(const BatteryTelemetry &data) {
+esp_err_t Receiver::send_battery(const telemetry::BatteryTelemetry &data) {
     if (!backend_) {
         ESP_LOGE(tag, "No backend registered for telemetry transmission");
         return ESP_ERR_INVALID_STATE;
@@ -127,7 +127,7 @@ esp_err_t Receiver::send_battery(const BatteryTelemetry &data) {
     return backend_->send_battery(data);
 }
 
-esp_err_t Receiver::send_gps(const GpsTelemetry &data) {
+esp_err_t Receiver::send_gps(const telemetry::GpsTelemetry &data) {
     if (!backend_) {
         ESP_LOGE(tag, "No backend registered for telemetry transmission");
         return ESP_ERR_INVALID_STATE;
@@ -135,7 +135,7 @@ esp_err_t Receiver::send_gps(const GpsTelemetry &data) {
     return backend_->send_gps(data);
 }
 
-esp_err_t Receiver::send_attitude(const AttitudeTelemetry& data)
+esp_err_t Receiver::send_attitude(const telemetry::AttitudeTelemetry& data)
 {
     if (!backend_) {
         ESP_LOGE(tag, "No backend registered for telemetry transmission");
@@ -144,7 +144,7 @@ esp_err_t Receiver::send_attitude(const AttitudeTelemetry& data)
     return backend_->send_attitude(data);
 }
 
-esp_err_t Receiver::send_link_stats(const LinkStatsTelemetry& data)
+esp_err_t Receiver::send_link_stats(const telemetry::LinkStatsTelemetry& data)
 {
     if (!backend_) {
         ESP_LOGE(tag, "No backend registered for telemetry transmission");
@@ -153,7 +153,7 @@ esp_err_t Receiver::send_link_stats(const LinkStatsTelemetry& data)
     return backend_->send_link_stats(data);
 }
 
-esp_err_t Receiver::send_airspeed(const AirspeedTelemetry& data)
+esp_err_t Receiver::send_airspeed(const telemetry::AirspeedTelemetry& data)
 {
     if (!backend_) {
         ESP_LOGE(tag, "No backend registered for telemetry transmission");
@@ -162,7 +162,7 @@ esp_err_t Receiver::send_airspeed(const AirspeedTelemetry& data)
     return backend_->send_airspeed(data);
 }
 
-esp_err_t Receiver::send_flight_mode(const FlightModeTelemetry& data)
+esp_err_t Receiver::send_flight_mode(const telemetry::FlightModeTelemetry& data)
 {
     if (!backend_) {
         ESP_LOGE(tag, "No backend registered for telemetry transmission");
@@ -171,7 +171,7 @@ esp_err_t Receiver::send_flight_mode(const FlightModeTelemetry& data)
     return backend_->send_flight_mode(data);
 }
 
-esp_err_t Receiver::send_temp(const TempTelemetry& data)
+esp_err_t Receiver::send_temp(const telemetry::TempTelemetry& data)
 {
     if (!backend_) {
         ESP_LOGE(tag, "No backend registered for telemetry transmission");
@@ -180,13 +180,22 @@ esp_err_t Receiver::send_temp(const TempTelemetry& data)
     return backend_->send_temp(data);
 }
 
-esp_err_t Receiver::send_rpm(const RpmTelemetry& data)
+esp_err_t Receiver::send_rpm(const telemetry::RpmTelemetry& data)
 {
     if (!backend_) {
         ESP_LOGE(tag, "No backend registered for telemetry transmission");
         return ESP_ERR_INVALID_STATE;
     }
     return backend_->send_rpm(data);
+}
+
+esp_err_t Receiver::send_accelgyro(const telemetry::AccelGyroTelemetry& data)
+{
+    if (!backend_) {
+        ESP_LOGE(tag, "No backend registered for telemetry transmission");
+        return ESP_ERR_INVALID_STATE;
+    }
+    return backend_->send_accelgyro(data);
 }
 
 bool Receiver::supports_telemetry() const
