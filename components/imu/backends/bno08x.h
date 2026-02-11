@@ -51,6 +51,14 @@ private:
     Config cfg_;
     BNO08x* sensor_{nullptr};
     bool running_{false};
+
+    // Debug counters
+    uint32_t accel_count_{0};
+    uint32_t gyro_count_{0};
+    uint32_t quat_count_{0};
+    int64_t last_accel_us_{0};
+    int64_t last_gyro_us_{0};
+    int64_t last_quat_us_{0};
 };
 
 } // namespace imu
