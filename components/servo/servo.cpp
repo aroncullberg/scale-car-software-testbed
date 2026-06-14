@@ -3,6 +3,7 @@
 #include <algorithm>
 
 Servo::Servo(const Config& config) : config_(config) {
+    center_pulse_width_us_ = (config.min_pulse_width_us + config.max_pulse_width_us) / 2;
     init();
 }
 
@@ -26,7 +27,7 @@ esp_err_t Servo::init() {
     uint32_t period_ticks = TIMEBASE_RESOLUTION_HZ / config_.freq_hz;
 
     mcpwm_timer_config_t timer_config = {
-        .group_id = 0,
+        .group_id = config_.group_id,
         .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
         .resolution_hz = TIMEBASE_RESOLUTION_HZ,
         .count_mode = MCPWM_TIMER_COUNT_MODE_UP,
@@ -39,7 +40,7 @@ esp_err_t Servo::init() {
     }
 
     mcpwm_operator_config_t operator_config = {
-        .group_id = 0,
+        .group_id = config_.group_id,
     };
     err = mcpwm_new_operator(&operator_config, &operator_);
     if (err != ESP_OK) {
@@ -118,22 +119,14 @@ uint32_t Servo::calculateCompareValue(const rclink::channel_value_t position) {
                           static_cast<uint32_t>(config_.max_pulse_width_us));
     }
 
-    // if (range_ < 0 || range_ > 75) {
-    //     ESP_LOGW(TAG, "Range out of bounds: %d, setting to default 20%%", range_);
-    //     range_ = std::clamp(range_, 0, 75);
-    // }
+    const int32_t half_range = (config_.max_pulse_width_us - config_.min_pulse_width_us) / 2;
+    const int32_t normalized_position = static_cast<int32_t>(position) - 1000; // -1000 to +1000
+    
+    // Invert the control direction before applying scaling if invert_steering_ is true
+    const int32_t direction = invert_steering_ ? -1 : 1;
+    const int32_t scaled_position = direction * normalized_position * half_range * range_ / (1000 * 100);
 
-    constexpr int32_t symmetric_offset = (2000 - 0) / 2; // RC channel range is 0-2000
-
-    const int32_t normalized_position = static_cast<int32_t>(position) - symmetric_offset;
-
-    const int32_t scaled_position = (normalized_position - 100)/ 2 * range_ / 100;
-
-    uint32_t pulse_width = center_pulse_width_us_ + offset_ + scaled_position; // Offset doesn't do anything anymore, but it's there for legacy (read: im lazy)
-
-    if (invert_steering_) {
-        pulse_width = config_.min_pulse_width_us + config_.max_pulse_width_us - pulse_width;
-    }
+    uint32_t pulse_width = center_pulse_width_us_ + offset_ + scaled_position;
 
     // ESP_LOGI(TAG, "Pulse width: %lu", pulse_width);
 
@@ -144,7 +137,6 @@ esp_err_t Servo::setPosition(const rclink::channel_value_t position)  {
     if (!enabled_) {
         return ESP_ERR_INVALID_STATE;
     }
-    // ESP_LOGI(TAG, "Setting servo position: %d", calculateCompareValue(position));
     return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
 }
 
@@ -168,7 +160,11 @@ esp_err_t Servo::setLimits(uint16_t min_us, uint16_t max_us) {
     }
     config_.min_pulse_width_us = min_us;
     config_.max_pulse_width_us = max_us;
-    ESP_LOGI(TAG, "Limits updated to [%u, %u] us", min_us, max_us);
+    
+    // Recalculate default center point to match the midpoint of the new limits
+    center_pulse_width_us_ = (min_us + max_us) / 2;
+    
+    ESP_LOGI(TAG, "Limits updated to [%u, %u] us, center to %u us", min_us, max_us, center_pulse_width_us_);
     return ESP_OK;
 }
 

@@ -32,11 +32,12 @@ public:
      * @param b Blue value (0-255)
      */
     void set_color(uint8_t r, uint8_t g, uint8_t b);
+    void off();
 
     /**
-     * @brief Turn off LED
+     * @brief Multiplexed refresh for secondary or main strip sharing SPI3
      */
-    void off();
+    void refresh_strip_gpio(int target_gpio, int num_leds, const uint8_t pixels[][3]);
 
     // Delete copy/move
     Rgb(const Rgb&) = delete;
@@ -49,6 +50,7 @@ private:
     ~Rgb();
 
     void ensure_initialized();
+    void refresh_strip_gpio_nolock(int target_gpio, int num_leds, const uint8_t pixels[][3]);
 
     bool initialized_ = false;
     bool init_failed_ = false;

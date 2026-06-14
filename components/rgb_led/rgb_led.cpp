@@ -1,6 +1,10 @@
 #include "rgb_led.h"
 #include "esp_log.h"
 #include "driver/spi_common.h"
+#include "esp_rom_gpio.h"
+#include "soc/gpio_sig_map.h"
+#include "soc/spi_periph.h"
+#include "driver/gpio.h"
 
 static const char* TAG = "rgb_led";
 
@@ -39,7 +43,7 @@ void Rgb::ensure_initialized()
 
     led_strip_config_t strip_config = {
         .strip_gpio_num = 48,
-        .max_leds = 1,
+        .max_leds = 34,      // Shared allocation max (supports GPIO 21 strip size)
         .led_pixel_format = LED_PIXEL_FORMAT_GRB,
         .led_model = LED_MODEL_WS2812,
         .flags = {
@@ -66,15 +70,62 @@ void Rgb::ensure_initialized()
     ESP_LOGI(TAG, "RGB LED initialized");
 }
 
-void Rgb::set_color(uint8_t r, uint8_t g, uint8_t b)
+void Rgb::refresh_strip_gpio_nolock(int target_gpio, int num_leds, const uint8_t pixels[][3])
+{
+    // The three pins we multiplex
+    const int pins[] = {5, 21, 48};
+    
+    // 1. Route SPI3 MOSI output to target_gpio
+    esp_rom_gpio_connect_out_signal(target_gpio, spi_periph_signal[SPI3_HOST].spid_out, false, false);
+
+    // 2. Disconnect SPI3 MOSI from other pins and clamp them LOW
+    //    IMPORTANT: Set the GPIO output register LOW *before* switching the pin's
+    //    signal source from SPI MOSI to the GPIO output register. This prevents a
+    //    brief HIGH glitch if the SPI MOSI line was left HIGH after the last transfer.
+    for (int pin : pins) {
+        if (pin != target_gpio) {
+            gpio_set_level((gpio_num_t)pin, 0);
+            gpio_set_direction((gpio_num_t)pin, GPIO_MODE_OUTPUT);
+            esp_rom_gpio_connect_out_signal(pin, SIG_GPIO_OUT_IDX, false, false);
+        }
+    }
+
+    // 3. Load the pixel data
+    for (int i = 0; i < num_leds; i++) {
+        led_strip_set_pixel(strip_, i, pixels[i][0], pixels[i][1], pixels[i][2]);
+    }
+    for (int i = num_leds; i < 34; i++) {
+        led_strip_set_pixel(strip_, i, 0, 0, 0);
+    }
+
+    // 4. Refresh
+    led_strip_refresh(strip_);
+}
+
+void Rgb::refresh_strip_gpio(int target_gpio, int num_leds, const uint8_t pixels[][3])
 {
     ensure_initialized();
-
     if (init_failed_) {
         return;
     }
 
-    if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(10)) != pdTRUE) {
+    if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(50)) != pdTRUE) {
+        return;
+    }
+
+    refresh_strip_gpio_nolock(target_gpio, num_leds, pixels);
+
+    xSemaphoreGive(mutex_);
+}
+
+void Rgb::set_color(uint8_t r, uint8_t g, uint8_t b)
+{
+    ensure_initialized();
+    if (init_failed_) {
+        return;
+    }
+
+    if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(50)) != pdTRUE) {
         return;
     }
 
@@ -83,13 +134,12 @@ void Rgb::set_color(uint8_t r, uint8_t g, uint8_t b)
         return;
     }
 
-    if (led_strip_set_pixel(strip_, 0, r, g, b) == ESP_OK) {
-        if (led_strip_refresh(strip_) == ESP_OK) {
-            current_r_ = r;
-            current_g_ = g;
-            current_b_ = b;
-        }
-    }
+    uint8_t pixels[1][3] = {{r, g, b}};
+    refresh_strip_gpio_nolock(48, 1, pixels);
+
+    current_r_ = r;
+    current_g_ = g;
+    current_b_ = b;
 
     xSemaphoreGive(mutex_);
 }

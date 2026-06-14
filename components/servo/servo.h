@@ -16,6 +16,7 @@ public:
         int max_pulse_width_us{2000};        // Maximum pulse width in microseconds
         uint32_t freq_hz{50};                // PWM frequency in Hz (standard servo is 50Hz)
         rclink::channel_value_t failsafe_position{1000}; // Failsafe position (center)
+        int group_id{0};                     // MCPWM group ID (0 or 1)
     };
 
     explicit Servo(const Config& config);
