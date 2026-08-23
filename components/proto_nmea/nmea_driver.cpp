@@ -9,9 +9,9 @@
 #include "esp_log.h"
 
 #include "gps.h"
-#include "telemetry.h"
 
 #include "nmea_driver.h"
+#include "ubx.h"
 
 using nav::Gps;
 using nav::Location;
@@ -35,6 +35,16 @@ namespace proto
 
     esp_err_t NmeaDriver::init() {
         ESP_RETURN_ON_ERROR(configureUart(), TAG, "UART cfg failed");
+
+        if (cfg_.configure_module) {
+            const esp_err_t err = configureModule();
+            if (err != ESP_OK) {
+                ESP_LOGW(TAG, "Module configuration failed (%s), using current settings",
+                         esp_err_to_name(err));
+            }
+        }
+
+        ESP_RETURN_ON_ERROR(enablePatternDetection(), TAG, "pattern det enable");
         return ESP_OK;
     }
 
@@ -74,7 +84,7 @@ namespace proto
 
     esp_err_t NmeaDriver::configureUart() {
         const uart_config_t uart_cfg = {
-            .baud_rate = cfg_.buad_rate,
+            .baud_rate = cfg_.baud_rate,
             .data_bits = UART_DATA_8_BITS,
             .parity = UART_PARITY_DISABLE,
             .stop_bits = UART_STOP_BITS_1,
@@ -85,7 +95,7 @@ namespace proto
         ESP_RETURN_ON_ERROR(uart_driver_install(cfg_.uart_num,
                                 cfg_.rx_buffer_size,
                                 cfg_.tx_buffer_size,
-                                QUEUE_LEN,
+                                cfg_.pattern_queue_size,
                                 &uart_queue_,
                                 0),
                             TAG, "driver install");
@@ -96,18 +106,149 @@ namespace proto
                                 UART_PIN_NO_CHANGE,
                                 UART_PIN_NO_CHANGE),
                             TAG, "pin map");
+        active_baud_ = cfg_.baud_rate;
+        return ESP_OK;
+    }
+
+    esp_err_t NmeaDriver::enablePatternDetection() {
         ESP_RETURN_ON_ERROR(uart_enable_pattern_det_baud_intr(
                                 cfg_.uart_num,
-                                '\n', // 10 <=> LF
+                                PATTERN_CHAR,
                                 1,
-                                9, // idle BETWEEN two pattern chrs (is this in time or bytes?)
-                                0, // idle AFTER the LAST pattern character
-                                0), // idle BEFORE the FRIST apttern character
+                                9, // idle between two pattern characters
+                                0, // idle after the last pattern character
+                                0), // idle before the first pattern character
                             TAG, "pattern det enable");
-
-        // this allocates memory for given length for something, see https://docs.espressif.com/projects/esp-idf/en/v5.4.1/esp32s3/api-reference/peripherals/uart.html#_CPPv424uart_pattern_queue_reset11uart_port_ti
-        ESP_RETURN_ON_ERROR(uart_pattern_queue_reset(cfg_.uart_num, QUEUE_LEN), TAG, "pattern det queue reset");
+        ESP_RETURN_ON_ERROR(uart_pattern_queue_reset(cfg_.uart_num, cfg_.pattern_queue_size),
+                            TAG, "pattern det queue reset");
+        uart_flush_input(cfg_.uart_num);
+        xQueueReset(uart_queue_);
         return ESP_OK;
+    }
+
+    esp_err_t NmeaDriver::setUartBaud(int baud) {
+        ESP_RETURN_ON_ERROR(uart_set_baudrate(cfg_.uart_num, baud), TAG, "set baud");
+        active_baud_ = baud;
+        uart_flush_input(cfg_.uart_num);
+        return ESP_OK;
+    }
+
+    bool NmeaDriver::probeModule(int baud, uint32_t timeout_ms) {
+        if (setUartBaud(baud) != ESP_OK) return false;
+
+        uint8_t buf[128];
+        const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+        size_t sentence_starts = 0;
+        uint8_t prev = 0;
+
+        // A talker ID always follows the '$', matching both bytes keeps line noise from a wrong
+        // baud rate out of the result.
+        while (xTaskGetTickCount() < deadline) {
+            const int len = uart_read_bytes(cfg_.uart_num, buf, sizeof(buf), pdMS_TO_TICKS(100));
+            for (int i = 0; i < len; ++i) {
+                if (prev == '$' && buf[i] == 'G' && ++sentence_starts >= 2) return true;
+                prev = buf[i];
+            }
+        }
+        return false;
+    }
+
+    esp_err_t NmeaDriver::sendValset(const void *frame, size_t len, uint32_t ack_timeout_ms) {
+        uart_flush_input(cfg_.uart_num);
+        if (uart_write_bytes(cfg_.uart_num, frame, len) != static_cast<int>(len)) {
+            return ESP_FAIL;
+        }
+
+        ubx::AckScanner scanner(ubx::CLASS_CFG, ubx::ID_CFG_VALSET);
+        uint8_t buf[128];
+        const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(ack_timeout_ms);
+
+        while (xTaskGetTickCount() < deadline) {
+            const int read = uart_read_bytes(cfg_.uart_num, buf, sizeof(buf), pdMS_TO_TICKS(50));
+            for (int i = 0; i < read; ++i) {
+                switch (scanner.feed(buf[i])) {
+                    case ubx::AckScanner::Result::Ack: return ESP_OK;
+                    case ubx::AckScanner::Result::Nak: return ESP_ERR_INVALID_ARG;
+                    case ubx::AckScanner::Result::Pending: break;
+                }
+            }
+        }
+        return ESP_ERR_TIMEOUT;
+    }
+
+    esp_err_t NmeaDriver::configureModule() {
+        // The module keeps its flash configuration across power cycles, so it may answer at the
+        // configured baud, at the target baud (warm reset with our RAM settings still live), or at
+        // the u-blox default.
+        const int candidates[] = {cfg_.baud_rate, cfg_.target_baud_rate, 9600};
+        int found = 0;
+        for (int baud : candidates) {
+            if (baud <= 0) continue;
+            if (probeModule(baud, 1500)) {
+                found = baud;
+                break;
+            }
+        }
+        if (found == 0) {
+            ESP_LOGE(TAG, "No GPS output detected on any candidate baud rate");
+            return ESP_ERR_NOT_FOUND;
+        }
+        ESP_LOGI(TAG, "GPS responding at %d baud", found);
+
+        // Only RMC (position, speed, course, time) and GGA (altitude, satellites, HDOP) are parsed,
+        // every other sentence is dead weight on the link and directly caps the achievable rate.
+        const ubx::KeyValue nav_cfg[] = {
+            {ubx::KEY_MSGOUT_NMEA_GGA_UART1, 1},
+            {ubx::KEY_MSGOUT_NMEA_RMC_UART1, 1},
+            {ubx::KEY_MSGOUT_NMEA_GLL_UART1, 0},
+            {ubx::KEY_MSGOUT_NMEA_GSA_UART1, 0},
+            {ubx::KEY_MSGOUT_NMEA_GSV_UART1, 0},
+            {ubx::KEY_MSGOUT_NMEA_VTG_UART1, 0},
+            {ubx::KEY_MSGOUT_NMEA_ZDA_UART1, 0},
+            {ubx::KEY_MSGOUT_NMEA_DTM_UART1, 0},
+            {ubx::KEY_MSGOUT_NMEA_GBS_UART1, 0},
+            {ubx::KEY_MSGOUT_NMEA_GNS_UART1, 0},
+            {ubx::KEY_MSGOUT_NMEA_GRS_UART1, 0},
+            {ubx::KEY_MSGOUT_NMEA_GST_UART1, 0},
+            {ubx::KEY_MSGOUT_NMEA_VLW_UART1, 0},
+            {ubx::KEY_RATE_MEAS, cfg_.meas_rate_ms},
+            {ubx::KEY_RATE_NAV, 1},
+        };
+
+        uint8_t frame[UBX_FRAME_MAX];
+        size_t len = ubx::buildValset(ubx::LAYER_RAM, nav_cfg,
+                                      sizeof(nav_cfg) / sizeof(nav_cfg[0]),
+                                      frame, sizeof(frame));
+        if (len == 0) return ESP_ERR_NO_MEM;
+
+        esp_err_t err = sendValset(frame, len, 1000);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Sentence/rate configuration not acknowledged: %s", esp_err_to_name(err));
+            return err;
+        }
+        ESP_LOGI(TAG, "Navigation rate set to %u ms, sentence set reduced to RMC + GGA",
+                 cfg_.meas_rate_ms);
+
+        if (cfg_.target_baud_rate <= 0 || cfg_.target_baud_rate == found) return ESP_OK;
+
+        const ubx::KeyValue port_cfg[] = {
+            {ubx::KEY_UART1_BAUDRATE, static_cast<uint32_t>(cfg_.target_baud_rate)},
+        };
+        len = ubx::buildValset(ubx::LAYER_RAM, port_cfg, 1, frame, sizeof(frame));
+        if (len == 0) return ESP_ERR_NO_MEM;
+
+        // The ACK is sent at the old baud rate but the module may switch before it drains, so the
+        // outcome is verified by probing rather than trusted from the ACK.
+        sendValset(frame, len, 300);
+
+        if (probeModule(cfg_.target_baud_rate, 1500)) {
+            ESP_LOGI(TAG, "Switched link to %d baud", cfg_.target_baud_rate);
+            return ESP_OK;
+        }
+
+        ESP_LOGW(TAG, "Module did not switch to %d baud, staying at %d",
+                 cfg_.target_baud_rate, found);
+        return setUartBaud(found);
     }
 
     void NmeaDriver::taskEntry(void *arg) {
@@ -116,7 +257,7 @@ namespace proto
     }
 
     void NmeaDriver::run() {
-        ESP_LOGI(TAG, "Task started");
+        ESP_LOGI(TAG, "Task started at %d baud", active_baud_);
 
         Location location;
         Date date;
@@ -127,6 +268,7 @@ namespace proto
         Satellite satellites;
 
         uint64_t prev_us = 0;
+        uint32_t prev_epoch_cs = UINT32_MAX;
 
         while (running_) {
             uart_event_t event{};
@@ -144,19 +286,11 @@ namespace proto
                 continue;
             }
 
-            // uint64_t now_us = esp_timer_get_time();
-            // if (prev_us) {
-            //     uint64_t delta_us = now_us - prev_us;
-            //     float freq_hz = 1e6f / delta_us;
-            //     ESP_LOGI(TAG, "(%04lld ms) %-4.1f Hz ", delta_us / 1000, freq_hz);
-            // }
-            // prev_us = now_us;
-
             int pos = uart_pattern_pop_pos(cfg_.uart_num);
             if (pos < 0 || pos > SENTENCE_MAX) {
                 ESP_LOGW(TAG, "No pattern detected or out of range (pat_pos: %d) (event.type: %d", pos, event.type);
                 uart_flush_input(cfg_.uart_num);
-                uart_pattern_queue_reset(cfg_.uart_num, QUEUE_LEN);
+                uart_pattern_queue_reset(cfg_.uart_num, cfg_.pattern_queue_size);
                 continue;
             }
 
@@ -171,20 +305,9 @@ namespace proto
             buf[len] = '\0';
             ESP_LOGD(TAG, "%*s", (int)(len - 2),  buf);
 
-            // if (!gps_.location.isValid()) {
-            //     ESP_LOGI(TAG, "%*s", (int)(len - 2),  buf);
-            // }
-
             ingest(buf, static_cast<size_t>(len));
 
-            {
-                telemetry::FlightModeTelemetry fm{};
-                snprintf(fm.mode, sizeof(fm.mode), "P:%u", (unsigned)gps_.passedChecksum());
-                telemetry::publish(fm);
-            }
-
             if (gps_.location.isUpdated()) {
-                // ESP_LOGI(TAG, "Location updated");
                 location.age = gps_.location.age();
                 location.lat_e7 = static_cast<int32_t>(gps_.location.lat() * 1e7);
                 // ESP_LOGI(TAG, "\tLocation lat: %ld", location.lat_e7);
@@ -192,16 +315,6 @@ namespace proto
                 // ESP_LOGI(TAG, "\tLocation lon: %ld", location.lon_e7);
                 location.isValid = gps_.location.isValid();
                 Gps::instance().setLocation(location);
-
-                telemetry::GpsTelemetry telem = {
-                    .latitude_1e7 = location.lat_e7,
-                    .longitude_1e7 = location.lon_e7,
-                    .speed_kmh = static_cast<uint16_t>(speed.speed_kmph),
-                    .heading_deg = static_cast<uint16_t>(course.course_cd / 100),
-                    .altitude_m = static_cast<uint16_t>(altitude.altitude_m),
-                    .satellites = static_cast<uint8_t>(satellites.satellites),
-                };
-                telemetry::publish(telem);
             }
 
             if (gps_.date.isUpdated()) {
@@ -227,6 +340,19 @@ namespace proto
                 time.centisecond = gps_.time.centisecond();
                 time.isValid = gps_.time.isValid();
                 Gps::instance().setTime(time);
+
+                // Every sentence in an epoch repeats the same timestamp, so this counts fixes
+                // rather than sentences.
+                const uint32_t epoch_cs = (time.hour * 360000u) + (time.minute * 6000u) +
+                                          (time.second * 100u) + time.centisecond;
+                if (epoch_cs != prev_epoch_cs) {
+                    const uint64_t now_us = esp_timer_get_time();
+                    if (prev_us) {
+                        ESP_LOGD(TAG, "Fix interval %llu ms", (now_us - prev_us) / 1000);
+                    }
+                    prev_us = now_us;
+                    prev_epoch_cs = epoch_cs;
+                }
             }
 
             if (gps_.speed.isUpdated()) {

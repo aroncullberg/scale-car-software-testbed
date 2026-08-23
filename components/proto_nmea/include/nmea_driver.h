@@ -22,7 +22,10 @@ namespace proto
             uart_port_t uart_num{UART_NUM_1};
             gpio_num_t uart_tx_pin{GPIO_NUM_NC};
             gpio_num_t uart_rx_pin{GPIO_NUM_NC};
-            int buad_rate{38400};
+            int baud_rate{38400};
+            int target_baud_rate{115200};
+            uint16_t meas_rate_ms{100};
+            bool configure_module{true};
             size_t rx_buffer_size{2048};
             size_t tx_buffer_size{0};
             int pattern_queue_size{16};
@@ -43,19 +46,25 @@ namespace proto
 
     private:
         esp_err_t configureUart();
+        esp_err_t enablePatternDetection();
+        esp_err_t configureModule();
+        esp_err_t setUartBaud(int baud);
+        bool probeModule(int baud, uint32_t timeout_ms);
+        esp_err_t sendValset(const void *frame, size_t len, uint32_t ack_timeout_ms);
         static void taskEntry(void *arg);
         void run();
         void ingest(const char* data, size_t len);
 
         static constexpr char TAG[]         = "NmeaDriver";
         static constexpr char PATTERN_CHAR  = '\n';
-        static constexpr size_t QUEUE_LEN   = 16;
         static constexpr size_t SENTENCE_MAX = 512;
+        static constexpr size_t UBX_FRAME_MAX = 128;
 
         Config          cfg_{};
         TaskHandle_t    task_{nullptr};
         QueueHandle_t   uart_queue_{nullptr};
         bool            running_{false};
+        int             active_baud_{0};
         TinyGPSPlus     gps_{};
     };
 
