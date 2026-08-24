@@ -11,11 +11,13 @@ idf_component_register(
         nav
         proto_nmea
         imu
-        telemetry
+        rgb_led
+        blackboard
+        logger
+        tcp_sink
 )
 
-target_compile_options(${COMPONENT_LIB} PRIVATE 
-    -fno-rtti  # Disable RTTI
-    -fno-exceptions  # Optional: also disable exceptions if not needed
+target_compile_options(${COMPONENT_LIB} PRIVATE
+    -fno-rtti
+    -fno-exceptions
 )
-
