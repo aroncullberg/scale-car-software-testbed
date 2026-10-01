@@ -2,7 +2,7 @@
 
 A custom-built RC car platform using an ESP32-S3 as an intermediary between driver input and hardware, designed as a testbed for experimenting with torque vectoring, autonomous navigation, and other stuff (lol lets see how much of this we actually have time to implement).
 
-(disclaimer: the codebase here on git is like 8-9 months behind what it actually is)
+***(disclaimer: the codebase here on git is like 8-9 months behind what it actually is, this is mostly a place for us to update with img/vid of it.)***
 
 ---
 
