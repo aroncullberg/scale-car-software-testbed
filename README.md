@@ -8,10 +8,10 @@ A custom-built RC car platform using an ESP32-S3 as an intermediary between driv
 
 ## Current Build (v2)
 
-https://github.com/user-attachments/assets/ee8ba329-538b-44a7-92a3-a19ecb7920bb
 
 https://github.com/user-attachments/assets/c6cce1a8-0d9e-42ff-9df5-816df45af586
 
+https://github.com/user-attachments/assets/ee8ba329-538b-44a7-92a3-a19ecb7920bb
 
 
 ![IMG_1169](https://github.com/user-attachments/assets/0efefc2d-3c70-428e-88ce-1af553ad28ac)
@@ -100,6 +100,11 @@ https://github.com/user-attachments/assets/9d515676-ec9a-4bec-ab3a-135b9c511faa
 ---
 
 ## Gallery
+
+
+<img width="1748" height="616" alt="image" src="https://github.com/user-attachments/assets/9a289d6f-11a9-4f09-8a4d-61228c1f36d9" />
+
+
 
 ### v1
 <p align="center">
