@@ -51,17 +51,6 @@ namespace proto
         // Simplified interface
         esp_err_t start(const rclink::uart_pins_t& pins, uint32_t timeout_ms) override;
         esp_err_t stop() override;
-        bool supports_telemetry() const override { return true; }
-
-        // Telemetry transmission methods
-        esp_err_t send_battery(const telemetry::BatteryTelemetry& data) const override;
-        esp_err_t send_gps(const telemetry::GpsTelemetry& data) const override;
-        esp_err_t send_attitude(const telemetry::AttitudeTelemetry& data) const override;
-        esp_err_t send_airspeed(const telemetry::AirspeedTelemetry& data) const override;
-        esp_err_t send_flight_mode(const telemetry::FlightModeTelemetry& data) const override;
-        esp_err_t send_temp(const telemetry::TempTelemetry& data) const override;
-        esp_err_t send_rpm(const telemetry::RpmTelemetry& data) const override;
-        esp_err_t send_accelgyro(const telemetry::AccelGyroTelemetry& data) const override;
 
         ExpressLRS(const ExpressLRS&) = delete;
         ExpressLRS& operator=(const ExpressLRS&) = delete;
@@ -69,6 +58,10 @@ namespace proto
     private:
         static void taskEntry(void *arg);
         void run();
+
+        // Reads the latest producer values from the blackboard and transmits
+        // them as CRSF telemetry frames.
+        void send_telemetry();
 
         static constexpr uint16_t RAW_MIN = 172;
         static constexpr uint16_t RAW_MAX = 1810;

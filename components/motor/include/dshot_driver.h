@@ -35,15 +35,46 @@ public:
 
     ErpmSample erpm() const;
 
+    // Bench self-test: arms RX and then transmits with the line still driven
+    // push-pull, so the receiver should capture our own frame. Distinguishes
+    // "RMT RX cannot see this pin at all" from "we miss the ESC's reply".
+    // Returns the number of receive completions out of `frames` attempts.
+    uint32_t selftest_loopback(int frames);
+
+    // Populated by selftest_loopback: raw pad reads taken while we transmit.
+    struct PadProbe { uint32_t edges; uint32_t high; uint32_t low; };
+    PadProbe pad_probe() const { return {pad_edges_, pad_high_, pad_low_}; }
+
     // Bench diagnostics for the half-duplex path. Nothing depends on these.
     struct RxStats {
         uint32_t rx_isr;      // RX completions seen
         uint32_t rx_symbols;  // symbols in the last completion
         uint32_t decode_fail; // completions whose GCR/CRC decode failed
         uint32_t arm_fail;    // rmt_enable or rmt_receive returned an error
+        uint32_t tx_done;     // TX completion callbacks
+        uint32_t rx_armed;    // times rmt_receive was actually issued
+        uint32_t tx_fail;      // rmt_transmit returned an error
+        uint32_t stale_reset;  // receptions aborted because the ESC never answered
+        uint32_t empty_rx;     // completions holding nothing, from our own handover
+        uint32_t arm_cyc_last; // CPU cycles spent in mode_rx() arming the receiver
+        uint32_t arm_cyc_max;
+        uint32_t tx_cyc_last;  // CPU cycles spent inside rmt_transmit()
+        uint32_t tx_cyc_max;
+        // First two symbol durations of the last reception that failed to
+        // decode, in RMT ticks. A handover glitch is one short symbol; a real
+        // GCR reply is several at the telemetry bit period, and these give
+        // that period directly when the decode is wrong about it.
+        uint16_t fail_d0;
+        uint16_t fail_d1;
+        uint16_t fail_d2;
+        uint16_t fail_d3;
     };
     RxStats rx_stats() const {
-        return {rx_isr_count_, rx_symbol_count_, decode_fail_count_, arm_fail_count_};
+        return {rx_isr_count_, rx_symbol_count_, decode_fail_count_,
+                arm_fail_count_, tx_done_count_, rx_armed_count_, tx_fail_count_,
+                stale_reset_count_, empty_rx_count_, arm_cyc_last_, arm_cyc_max_,
+                tx_cyc_last_, tx_cyc_max_,
+                fail_d_[0], fail_d_[1], fail_d_[2], fail_d_[3]};
     }
 
     static float erpm_to_rpm_ratio(uint8_t poles) {
@@ -68,7 +99,9 @@ private:
     bool inverted_;
     bool telemetry_;
     bool enabled_{false};
-    bool mode_{true}; // true = TX
+    // Written by tx_done_isr and read by the task in mode_tx(); must not be
+    // cached in a register or the half-duplex handoff stalls.
+    volatile bool mode_{true}; // true = TX
 
     rmt_channel_handle_t rx_channel_{nullptr};
     rmt_channel_handle_t tx_channel_{nullptr};
@@ -90,6 +123,22 @@ private:
     volatile uint32_t rx_symbol_count_{0};
     volatile uint32_t decode_fail_count_{0};
     volatile uint32_t arm_fail_count_{0};
+    volatile uint32_t tx_done_count_{0};
+    volatile uint32_t rx_armed_count_{0};
+    volatile uint32_t tx_fail_count_{0};
+    volatile uint32_t stale_reset_count_{0};
+    volatile uint32_t empty_rx_count_{0};
+    // Set when rmt_receive is armed, cleared by the recv-done ISR. Both writers
+    // are the same RMT interrupt, so no lock is needed.
+    volatile bool rx_pending_{false};
+    volatile uint32_t arm_cyc_last_{0};
+    volatile uint32_t arm_cyc_max_{0};
+    volatile uint32_t tx_cyc_last_{0};
+    volatile uint32_t tx_cyc_max_{0};
+    volatile uint16_t fail_d_[4]{};
+    volatile uint32_t pad_edges_{0};
+    volatile uint32_t pad_high_{0};
+    volatile uint32_t pad_low_{0};
 
     static constexpr uint32_t INVALID_TELEMETRY = 0xffff;
     static constexpr uint32_t TELEMETRY_TIMEOUT_US = 10000;

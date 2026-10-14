@@ -174,71 +174,18 @@ void Controller::control_motors(const rclink::RcChannels &channels) {
                             &config_.motor_rl, &config_.motor_rr};
 
   motor::RpmSample rpm[4];
-  bool moving = false;
-  bool stopped_evidence = false;
   for (int i = 0; i < 4; i++) {
     rpm[i] = motors[i]->rpm();
-    if (rpm[i].status == motor::RpmStatus::Valid &&
-        std::abs(rpm[i].rpm) > MOVING_RPM) {
-      moving = true;
-    }
-    if (rpm[i].status == motor::RpmStatus::Stopped) {
-      stopped_evidence = true;
-    }
   }
-  standstill_frames_ =
-      (moving || !stopped_evidence) ? 0 : standstill_frames_ + 1;
-
-  const motor::Gear gear_request = channels.ch8.scaled > 1975
-                                       ? motor::Gear::REVERSE
-                                       : motor::Gear::FORWARD;
-
-  bool gear_mismatch = false;
-  for (auto *m : motors) {
-    if (m->gear() != gear_request) gear_mismatch = true;
-  }
-
-  if (gear_mismatch && standstill_frames_ >= STANDSTILL_CONFIRM_FRAMES) {
-    for (auto *m : motors) {
-      m->set_gear(gear_request);
-    }
-    throttle_armed_ = false;
-  }
-
-  const int32_t brake_offset =
-      std::abs(static_cast<int32_t>(channels.ch3.scaled) - BRAKE_CENTER);
-  const float brake =
-      brake_offset <= BRAKE_DEADBAND
-          ? 0.0f
-          : std::min(1.0f, static_cast<float>(brake_offset - BRAKE_DEADBAND) /
-                               (BRAKE_CENTER - BRAKE_DEADBAND));
 
   const rclink::channel_value_t throttle_input = channels.ch1.scaled;
-  if (throttle_input < THROTTLE_DEADBAND) {
-    throttle_armed_ = true;
-  }
-
-  int16_t command;
-  if (brake > 0.0f) {
-    command = -static_cast<int16_t>(brake * motor::HALF_SPAN);
-  } else if (gear_mismatch || !throttle_armed_) {
-    command = 0;
-  } else {
-    command = static_cast<int16_t>((throttle_input / 2000.0f) * motor::HALF_SPAN);
-  }
-
-  const bool enabled[] = {
-      channels.ch13.scaled > 1975,
-      channels.ch14.scaled > 1975,
-      channels.ch15.scaled > 1975,
-      channels.ch16.scaled > 1975,
-  };
+  const int16_t command = throttle_input < THROTTLE_DEADBAND
+                              ? 0
+                              : static_cast<int16_t>(
+                                    (throttle_input / 2000.0f) * motor::HALF_SPAN);
 
   for (int i = 0; i < 4; i++) {
-    bool ret = motors[i]->command(enabled[i] ? command : 0);
-    ESP_LOGI(TAG, "Motor %d: RPM=%d, Status=%d, Enabled=%d, Command=%d, ret=%d, State=%d, Gear=%d",
-        i, rpm[i].rpm, static_cast<int>(rpm[i].status), enabled[i], command, ret,
-        static_cast<int>(motors[i]->state()), static_cast<int>(motors[i]->gear()));
+    motors[i]->command(command);
   }
 
   blackboard::publish(motor::RpmReading{
@@ -260,8 +207,6 @@ void Controller::countersteer() {
 
 void Controller::handle_rc_loss() {
   armed_ = false;
-  throttle_armed_ = false;
-  standstill_frames_ = 0;
   config_.motor_fr.disarm();
   config_.motor_fl.disarm();
   config_.motor_rl.disarm();

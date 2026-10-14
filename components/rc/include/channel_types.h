@@ -5,6 +5,8 @@
 #pragma once
 #include <cstdint>
 
+#include "blackboard/blackboard.h"
+
 namespace rclink
 {
 /**
@@ -40,4 +42,8 @@ struct RcChannels {
                 ch9, ch10, ch11, ch12, ch13, ch14, ch15, ch16;
 };
 
+}
+
+namespace blackboard {
+template <> struct Topic<rclink::RcChannels> { static constexpr TopicId id = TopicId::rc_channels; };
 }

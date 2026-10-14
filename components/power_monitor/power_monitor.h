@@ -1,15 +1,24 @@
 #pragma once
 
-#include <atomic>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_err.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
+#include "blackboard/blackboard.h"
 
 class PowerMonitor {
 public:
+    struct Reading {
+        int32_t voltage_mv;
+        int32_t current_ma;
+        uint32_t consumed_mah;
+        uint8_t remaining_pct;
+        uint8_t cell_count;
+        bool valid;
+    };
+
     struct Config {
         // Voltage channel (battery via voltage divider)
         adc_unit_t voltage_adc_unit;
@@ -40,12 +49,6 @@ public:
     esp_err_t start();
     void stop();
 
-    int32_t get_voltage_mv() const;
-    int32_t get_current_ma() const;
-    uint32_t get_consumed_mah() const;
-    uint8_t get_remaining_pct() const;
-    bool has_valid_reading() const;
-
 private:
     PowerMonitor() = default;
     ~PowerMonitor();
@@ -71,12 +74,6 @@ private:
 
     TaskHandle_t task_handle_{nullptr};
 
-    std::atomic<int32_t> voltage_mv_{0};
-    std::atomic<int32_t> current_ma_{0};
-    std::atomic<uint32_t> consumed_mah_{0};
-    std::atomic<uint8_t> remaining_pct_{0};
-    std::atomic<bool> valid_reading_{false};
-
     // Coulomb counting accumulator (not atomic — only written from task)
     double consumed_mah_accum_{0.0};
 
@@ -88,3 +85,7 @@ private:
 
     static constexpr const char* TAG = "PowerMonitor";
 };
+
+namespace blackboard {
+template <> struct Topic<PowerMonitor::Reading> { static constexpr TopicId id = TopicId::battery; };
+}

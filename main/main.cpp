@@ -13,7 +13,11 @@
 #include "imu.h"
 #include "led_strip.h"
 #include "motor.h"
+#include "dshot_driver.h"
+#include "esp_timer.h"
+#include "esp_rom_sys.h"
 #include "nmea_driver.h"
+#include "pin_test.h"
 #include "power_monitor.h"
 #include "rclink.h"
 #include "servo.h"
@@ -73,10 +77,64 @@ static void print_reset_reason(void) {
   ESP_LOGI(TAG, "================================================");
 }
 
+namespace {
+
+constexpr gpio_num_t GPIO_FL = GPIO_NUM_18;
+constexpr gpio_num_t GPIO_FR = GPIO_NUM_39;
+constexpr gpio_num_t GPIO_RL = GPIO_NUM_38;
+constexpr gpio_num_t GPIO_RR = GPIO_NUM_40;
+
+// Reads each pad with the internal pull-up, then the pull-down, and reports
+// whether the input follows. Standalone: no RMT, no driver, nothing else
+// configured on these pins yet. A pad that reads STUCK cannot receive
+// telemetry no matter what the ESC does.
+
+void probe_pads() {
+  struct Pad { gpio_num_t gpio; const char *note; };
+
+  static const Pad pads[] = {
+      {GPIO_FL, "motor_fl"},
+      {GPIO_FR, "motor_fr"},
+      {GPIO_RL, "motor_rl"},
+      {GPIO_RR, "motor_rr"},
+  };
+
+  for (const Pad &p : pads) {
+    gpio_config_t cfg = {
+        .pin_bit_mask = 1ULL << p.gpio,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&cfg);
+    esp_rom_delay_us(3000);
+    const int up = gpio_get_level(p.gpio);
+
+    cfg.pull_up_en = GPIO_PULLUP_DISABLE;
+    cfg.pull_down_en = GPIO_PULLDOWN_ENABLE;
+    gpio_config(&cfg);
+    esp_rom_delay_us(3000);
+    const int down = gpio_get_level(p.gpio);
+
+    const char *verdict = (up == 1 && down == 0) ? "READABLE"
+                          : (up == down)         ? "STUCK"
+                                                 : "inconclusive";
+    ESP_LOGI(TAG, "  GPIO%-2d pullup=%d pulldown=%d  %-12s (%s)",
+             static_cast<int>(p.gpio), up, down, verdict, p.note);
+  }
+}
+
+} // namespace
+
 extern "C" void app_main(void) {
   print_reset_reason();
 
   ESP_LOGI(TAG, "Car main application starting");
+
+  // Whole-chip pad walk. Its job was finding the dead pad on the old module
+  // and it is done; probe_pads() below still checks the ESC pins.
+  // pin_test::run_all();
 
   blackboard::init(); // the ELRS backend publishes RcChannels
 
@@ -192,140 +250,135 @@ extern "C" void app_main(void) {
   //     ESP_LOGI(TAG, "Logger task started");
   // }
 
-  // Servo::Config servo_cfg = {
-  //     .gpio_num = GPIO_NUM_47,
-  //     .min_pulse_width_us = 500,
-  //     .max_pulse_width_us = 2500,
-  //     .freq_hz = 50,
-  //     .failsafe_position = 1000 // Center position (its stupid i know but
-  //                               // this is rc cahnle , other is us)
-  // };
+  Servo::Config servo_cfg = {
+      .gpio_num = GPIO_NUM_47,
+      .min_pulse_width_us = 500,
+      .max_pulse_width_us = 2500,
+      .freq_hz = 50,
+      .failsafe_position = 1000 // Center position (its stupid i know but
+                                // this is rc cahnle , other is us)
+  };
 
-  // static Servo steering_servo(servo_cfg);
+  static Servo steering_servo(servo_cfg);
 
-  // Servo::Config aero_cfg = {.gpio_num = GPIO_NUM_4,
-  //                           .min_pulse_width_us = 1250,
-  //                           .max_pulse_width_us = 2300,
-  //                           .freq_hz = 50,
-  //                           .failsafe_position = 1000};
+  Servo::Config aero_cfg = {.gpio_num = GPIO_NUM_4,
+                            .min_pulse_width_us = 1250,
+                            .max_pulse_width_us = 2300,
+                            .freq_hz = 50,
+                            .failsafe_position = 1000};
 
-  // static Servo aero_servo(aero_cfg);
-  // aero_servo.setRange(100);
-  // aero_servo.setInvert(false);
+  static Servo aero_servo(aero_cfg);
+  aero_servo.setRange(100);
+  aero_servo.setInvert(false);
 
-  // Servo::Config aux1_cfg = {.gpio_num = GPIO_NUM_6,
-  //                           .min_pulse_width_us = 700,
-  //                           .max_pulse_width_us = 2500,
-  //                           .freq_hz = 50,
-  //                           .failsafe_position = 1000,
-  //                           .group_id = 1};
-  // static Servo aux_servo1(aux1_cfg);
-  // aux_servo1.setInvert(false);
-  // aux_servo1.setRange(100);
+  Servo::Config aux1_cfg = {.gpio_num = GPIO_NUM_6,
+                            .min_pulse_width_us = 700,
+                            .max_pulse_width_us = 2500,
+                            .freq_hz = 50,
+                            .failsafe_position = 1000,
+                            .group_id = 1};
+  static Servo aux_servo1(aux1_cfg);
+  aux_servo1.setInvert(false);
+  aux_servo1.setRange(100);
 
-  // Servo::Config aux2_cfg = {.gpio_num = GPIO_NUM_7,
-  //                           .min_pulse_width_us = 500,
-  //                           .max_pulse_width_us = 2300,
-  //                           .freq_hz = 50,
-  //                           .failsafe_position = 1000,
-  //                           .group_id = 1};
-  // static Servo aux_servo2(aux2_cfg);
-  // aux_servo2.setInvert(true);
-  // aux_servo2.setRange(100);
+  Servo::Config aux2_cfg = {.gpio_num = GPIO_NUM_7,
+                            .min_pulse_width_us = 500,
+                            .max_pulse_width_us = 2300,
+                            .freq_hz = 50,
+                            .failsafe_position = 1000,
+                            .group_id = 1};
+  static Servo aux_servo2(aux2_cfg);
+  aux_servo2.setInvert(true);
+  aux_servo2.setRange(100);
 
-  // static motor::Motor motor_fl(
-  //     {.gpio = GPIO_NUM_41, .mounting = motor::Mounting::NORMAL});
-  // static motor::Motor motor_fr(
-  //     {.gpio = GPIO_NUM_39, .mounting = motor::Mounting::NORMAL});
-  // static motor::Motor motor_rl(
-  //     {.gpio = GPIO_NUM_38, .mounting = motor::Mounting::MIRRORED});
-  // static motor::Motor motor_rr(
-  //     {.gpio = GPIO_NUM_40, .mounting = motor::Mounting::NORMAL});
+  static motor::Motor motor_fl(
+      {.gpio = GPIO_FL, .mounting = motor::Mounting::NORMAL});
+  static motor::Motor motor_fr(
+      {.gpio = GPIO_FR, .mounting = motor::Mounting::NORMAL});
+  static motor::Motor motor_rl(
+      {.gpio = GPIO_RL, .mounting = motor::Mounting::MIRRORED});
+  static motor::Motor motor_rr(
+      {.gpio = GPIO_RR, .mounting = motor::Mounting::NORMAL});
 
-  // vehicle::Controller::Config vehicle_cfg = {
-  //     .steering_servo = steering_servo,
-  //     .aero_servo = aero_servo,
-  //     .aux_servo1 = aux_servo1,
-  //     .aux_servo2 = aux_servo2,
-  //     .motor_fl = motor_fl,
-  //     .motor_fr = motor_fr,
-  //     .motor_rl = motor_rl,
-  //     .motor_rr = motor_rr,
-  // };
+  probe_pads();
 
-  // static vehicle::Controller vehicle_controller(vehicle_cfg);
-
-  // result = vehicle_controller.start();
-  // if (result != ESP_OK) {
-  //   ESP_LOGE(TAG, "Vehicle controller start failed: %s",
-  //            esp_err_to_name(result));
-  //   return;
-  // }
-
-  // --- Single-motor proof of concept: bypasses vehicle_controller entirely.
-  // Same gating as Controller::process_rc_input (ch1 low + ch5 high to arm,
-  // ch5 low to disarm), but drive-only, no brake/gear/3D-mode-limit logic.
-  // Splits the two halves of "bidirectional": proper inverted idle-high DShot
-  // with inverted CRC, but no half-duplex receive, so the line stays push-pull.
-  // If the ESC arms here, the fault is the open-drain receive window.
-  static motor::Motor test_motor({.gpio = GPIO_NUM_41,
-                                  .mounting = motor::Mounting::NORMAL,
-                                  .inverted = true,
-                                  .telemetry = false});
-
-  ESP_LOGI(TAG, "Initializing test motor on GPIO 41...");
-  esp_err_t motor_result = test_motor.init();
-  if (motor_result != ESP_OK) {
-    ESP_LOGE(TAG, "Motor init failed: %s", esp_err_to_name(motor_result));
+  motor::Motor *motors[] = {&motor_fl, &motor_fr, &motor_rl, &motor_rr};
+  for (motor::Motor *m : motors) {
+    result = m->init();
+    if (result != ESP_OK) {
+      ESP_LOGE(TAG, "motor init failed: %s", esp_err_to_name(result));
+      return;
+    }
   }
 
-  bool armed = false;
+  vehicle::Controller::Config vehicle_cfg = {
+      .steering_servo = steering_servo,
+      .aero_servo = aero_servo,
+      .aux_servo1 = aux_servo1,
+      .aux_servo2 = aux_servo2,
+      .motor_fl = motor_fl,
+      .motor_fr = motor_fr,
+      .motor_rl = motor_rl,
+      .motor_rr = motor_rr,
+  };
+
+  static vehicle::Controller vehicle_controller(vehicle_cfg);
+
+  result = vehicle_controller.start();
+  if (result != ESP_OK) {
+    ESP_LOGE(TAG, "Vehicle controller start failed: %s",
+             esp_err_to_name(result));
+    return;
+  }
+
+  ESP_LOGI(TAG, "vehicle controller started");
+
+  struct Wheel {
+    const char *name;
+    motor::Motor *m;
+  };
+  const Wheel wheels[] = {{"fl", &motor_fl},
+                          {"fr", &motor_fr},
+                          {"rl", &motor_rl},
+                          {"rr", &motor_rr}};
+
+  // Counters move every frame, so printing them on change would print forever.
+  // State and telemetry status are what matter moment to moment: those print
+  // the instant they change, the counters only on a slow heartbeat.
+  uint32_t last_key = 0xFFFFFFFF;
+  int heartbeat = 0;
 
   while (true) {
-    auto &receiver = rclink::Receiver::instance();
+    uint32_t key = 0;
+    for (const Wheel &w : wheels) {
+      key = (key << 8) | (static_cast<uint32_t>(w.m->state()) << 4) |
+            static_cast<uint32_t>(w.m->rpm().status);
+    }
 
-    if (!receiver.valid_data()) {
-      if (armed) {
-        armed = false;
-        test_motor.disarm();
-        ESP_LOGW(TAG, "RC lost, disarmed");
+    if (key != last_key || --heartbeat <= 0) {
+      last_key = key;
+      heartbeat = 20;
+      char line[384];
+      size_t off = 0;
+      for (const Wheel &w : wheels) {
+        const motor::RpmSample r = w.m->rpm();
+        const motor::DshotDriver::RxStats rx = w.m->rx_stats();
+        off += snprintf(line + off, sizeof(line) - off,
+                        "%s s%d/%d rpm%ld rx%lu bad%lu mt%lu stl%lu  ", w.name,
+                        static_cast<int>(w.m->state()),
+                        static_cast<int>(r.status), (long)r.rpm,
+                        (unsigned long)rx.rx_isr, (unsigned long)rx.decode_fail,
+                        (unsigned long)rx.empty_rx,
+                        (unsigned long)rx.stale_reset);
+        if (off >= sizeof(line)) break;
       }
-      ESP_LOGI(TAG, "RC no valid data");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      continue;
+      const motor::Motor::ClockStats ck = motor::Motor::clock_stats();
+      ESP_LOGI(TAG, "clock alarms=%lu ticks=%lu missed=%ld maxgap=%luus",
+               (unsigned long)ck.alarms, (unsigned long)ck.ticks,
+               (long)(ck.alarms - ck.ticks), (unsigned long)ck.max_gap_us);
+      ESP_LOGI(TAG, "%s", line);
     }
 
-    const rclink::RcChannels ch = receiver.get_channels();
-
-    if (ch.ch1.scaled < 25 && !armed && ch.ch5.scaled > 1975) {
-      armed = true;
-      test_motor.arm();
-      ESP_LOGI(TAG, "ARM requested");
-    } else if (ch.ch5.scaled <= 1975 && armed) {
-      armed = false;
-      test_motor.disarm();
-      ESP_LOGI(TAG, "DISARMED");
-    }
-
-    bool ret = false;
-    if (armed) {
-      float throttle = ch.ch1.scaled / 2000.0f;
-      ret = test_motor.drive(throttle);
-    }
-
-    motor::RpmSample rpm = test_motor.rpm();
-    motor::DshotDriver::RxStats rx = test_motor.rx_stats();
-    ESP_LOGI(TAG,
-             "ch1=%u ch5=%u armed=%d ret=%d state=%d rpm=%ld status=%d | "
-             "rx_isr=%lu syms=%lu decode_fail=%lu arm_fail=%lu",
-             ch.ch1.scaled, ch.ch5.scaled, armed, ret,
-             static_cast<int>(test_motor.state()),
-             static_cast<long>(rpm.rpm), static_cast<int>(rpm.status),
-             static_cast<unsigned long>(rx.rx_isr),
-             static_cast<unsigned long>(rx.rx_symbols),
-             static_cast<unsigned long>(rx.decode_fail),
-             static_cast<unsigned long>(rx.arm_fail));
-
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(250));
   }
 }

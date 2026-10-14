@@ -56,12 +56,6 @@ private:
     int steering_center_{1500};
     TaskHandle_t control_task_handle_{nullptr};
 
-    // Drive authority is withheld until the stick has returned to neutral once
-    // after a gear change, so a held throttle cannot launch the car the instant
-    // the ESCs finish flipping.
-    bool throttle_armed_{false};
-    uint32_t standstill_frames_{0};
-
     // LED Control state
     uint32_t led_update_counter_{0};
     uint8_t current_led_r_{120};
@@ -78,16 +72,7 @@ private:
     int seeker_dir_{1};
     float seeker_trails_[34]{0.0f};
 
-    static constexpr uint16_t BRAKE_CENTER = 1000;
-    static constexpr int32_t BRAKE_DEADBAND = 100;
     static constexpr uint16_t THROTTLE_DEADBAND = 40;
-
-    // A gear change needs positive evidence of standstill, not just absent
-    // telemetry: eRPM is unreliable under proportional braking, so a wheel
-    // reporting nothing is treated as unknown rather than stopped. Both values
-    // want bench tuning against the actual gearing.
-    static constexpr int32_t MOVING_RPM = 50;
-    static constexpr uint32_t STANDSTILL_CONFIRM_FRAMES = 50;
 
     static constexpr const char* TAG = "VehicleController";
 };

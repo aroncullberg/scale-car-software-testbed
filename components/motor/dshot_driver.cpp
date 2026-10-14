@@ -3,9 +3,11 @@
 #include <esp_check.h>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include <esp_cpu.h>
 #include <esp_attr.h>
 #include <driver/gpio.h>
 #include <hal/gpio_ll.h>
+#include <esp_rom_sys.h>
 
 static const char* TAG = "DshotDriver";
 
@@ -19,7 +21,7 @@ DshotDriver::~DshotDriver() {
         rmt_del_encoder(encoder_);
     }
     if (rx_channel_) {
-        if (enabled_) rmt_disable(rx_channel_);
+        if (enabled_ && telemetry_) rmt_disable(rx_channel_);
         rmt_del_channel(rx_channel_);
     }
     if (tx_channel_) {
@@ -71,7 +73,11 @@ esp_err_t DshotDriver::init() {
 
         rx_config_ = {
             .signal_range_min_ns = 150,
-            .signal_range_max_ns = 25000,
+            // Idle threshold ends the receive. The longest run inside a GCR
+            // response is 3 bits (~4 us), so this only needs to clear that,
+            // and a shorter value gets the callback out well before the next
+            // frame goes out.
+            .signal_range_max_ns = 10000,
         };
     }
 
@@ -111,14 +117,25 @@ esp_err_t DshotDriver::init() {
         .telemetry_req = false,
     };
 
-    // The TX channel is created after the RX one and re-runs gpio_func_sel, so
-    // re-assert the pull-up. Without it the line floats during the open-drain
-    // receive window instead of idling high.
+    // Both channels are supposed to leave the input buffer on (rx via
+    // gpio_input_enable, tx via io_loop_back), but the pad reads a constant 0
+    // unless it is asserted here after both exist. Without this the RMT RX
+    // never sees an edge, not even from our own transmission.
     if (telemetry_) {
+        gpio_ll_input_enable(&GPIO, gpio_);
         gpio_pullup_en(gpio_);
     }
 
     ESP_RETURN_ON_ERROR(rmt_enable(tx_channel_), TAG, "tx enable failed");
+
+    // The RX channel stays enabled for the life of the driver. Cycling
+    // rmt_enable/rmt_disable per frame put a rmt_disable on the next TX in a
+    // race with a reception that had started but not yet hit its idle
+    // threshold; losing that race aborts the receive with no callback.
+    if (telemetry_) {
+        ESP_RETURN_ON_ERROR(rmt_enable(rx_channel_), TAG, "rx enable failed");
+    }
+
     mode_ = true;
     enabled_ = true;
 
@@ -134,7 +151,13 @@ void DshotDriver::send_throttle(uint16_t value) {
     throttle_.throttle = value;
     throttle_.telemetry_req = false;
     mode_tx();
-    rmt_transmit(tx_channel_, encoder_, &throttle_, sizeof(throttle_), &tx_config_);
+    const uint32_t t0 = esp_cpu_get_cycle_count();
+    if (rmt_transmit(tx_channel_, encoder_, &throttle_, sizeof(throttle_), &tx_config_) != ESP_OK) {
+        tx_fail_count_++;
+    }
+    const uint32_t dt = esp_cpu_get_cycle_count() - t0;
+    tx_cyc_last_ = dt;
+    if (dt > tx_cyc_max_) tx_cyc_max_ = dt;
 }
 
 void DshotDriver::send_command(uint16_t cmd) {
@@ -142,8 +165,50 @@ void DshotDriver::send_command(uint16_t cmd) {
     throttle_.throttle = cmd;
     throttle_.telemetry_req = true;
     mode_tx();
-    rmt_transmit(tx_channel_, encoder_, &throttle_, sizeof(throttle_), &tx_config_);
+    if (rmt_transmit(tx_channel_, encoder_, &throttle_, sizeof(throttle_), &tx_config_) != ESP_OK) {
+        tx_fail_count_++;
+    }
     throttle_.telemetry_req = false;
+}
+
+uint32_t DshotDriver::selftest_loopback(int frames) {
+    if (!enabled_ || !telemetry_) return 0;
+
+    const uint32_t before = rx_isr_count_;
+    for (int i = 0; i < frames; i++) {
+        // reset the receiver in case a previous receive is still pending
+        rmt_disable(rx_channel_);
+        rmt_enable(rx_channel_);
+        rx_pending_ = false;
+
+        // stay push-pull: we want to hear ourselves, not hand the line over
+        gpio_ll_od_disable(&GPIO, gpio_);
+        mode_ = true;
+
+        if (rmt_receive(rx_channel_, rx_buf_, sizeof(rx_buf_), &rx_config_) != ESP_OK) {
+            arm_fail_count_++;
+            continue;
+        }
+        rx_pending_ = true;
+        throttle_.throttle = 0;
+        throttle_.telemetry_req = true;
+        rmt_transmit(tx_channel_, encoder_, &throttle_, sizeof(throttle_), &tx_config_);
+
+        // Read the pad directly while our own frame goes out. If this never
+        // changes, the GPIO input itself is dead and no RMT routing fix helps.
+        int last = gpio_ll_get_level(&GPIO, gpio_);
+        int lo = (last == 0), hi = (last != 0);
+        for (int k = 0; k < 4000; k++) {
+            const int now = gpio_ll_get_level(&GPIO, gpio_);
+            if (now != last) { pad_edges_++; last = now; }
+            if (now) hi++; else lo++;
+        }
+        pad_high_ = hi;
+        pad_low_ = lo;
+
+        esp_rom_delay_us(500);
+    }
+    return rx_isr_count_ - before;
 }
 
 ErpmSample DshotDriver::erpm() const {
@@ -164,6 +229,7 @@ bool IRAM_ATTR DshotDriver::tx_done_isr(rmt_channel_handle_t channel,
                                           const rmt_tx_done_event_data_t* edata,
                                           void* user_data) {
     auto* self = static_cast<DshotDriver*>(user_data);
+    self->tx_done_count_++;
     self->mode_rx();
     return false;
 }
@@ -172,12 +238,28 @@ bool IRAM_ATTR DshotDriver::rx_done_isr(rmt_channel_handle_t channel,
                                           const rmt_rx_done_event_data_t* edata,
                                           void* user_data) {
     auto* self = static_cast<DshotDriver*>(user_data);
+    self->rx_pending_ = false;
     self->rx_isr_count_++;
     self->rx_symbol_count_ = edata->num_symbols;
+
+    // Handing the line to the ESC puts an edge on the pad, which starts a
+    // reception that then idles out empty. One of these lands between every
+    // pair of real replies, so letting it through overwrites good telemetry
+    // with a failed decode half the time.
+    if (edata->num_symbols == 0 || edata->received_symbols[0].duration0 == 0) {
+        self->empty_rx_count_++;
+        return false;
+    }
+
     self->telemetry_gcr_ = extract_telemetry_gcr(
         edata->received_symbols, edata->num_symbols, self->telemetry_bit_len_ticks_);
     if (gcr_to_erpm_data(self->telemetry_gcr_) == INVALID_TELEMETRY) {
         self->decode_fail_count_++;
+        const size_t n = edata->num_symbols;
+        self->fail_d_[0] = n > 0 ? edata->received_symbols[0].duration0 : 0;
+        self->fail_d_[1] = n > 0 ? edata->received_symbols[0].duration1 : 0;
+        self->fail_d_[2] = n > 1 ? edata->received_symbols[1].duration0 : 0;
+        self->fail_d_[3] = n > 1 ? edata->received_symbols[1].duration1 : 0;
     }
     self->telemetry_stamp_us_ = static_cast<uint32_t>(esp_timer_get_time());
     return false;
@@ -192,23 +274,38 @@ void IRAM_ATTR DshotDriver::mode_tx() {
 
 void IRAM_ATTR DshotDriver::mode_rx() {
     if (mode_) {
+        const uint32_t t0 = esp_cpu_get_cycle_count();
         enable_rx();
         mode_ = false;
-        if (rmt_receive(rx_channel_, rx_buf_, sizeof(rx_buf_), &rx_config_) != ESP_OK) {
+        // RMT RX only completes on its idle threshold once it has captured at
+        // least one edge. A silent ESC therefore leaves the receiver in RUN
+        // forever and every later rmt_receive is rejected, so the stale one
+        // has to be aborted first. Conditional because the reset also masks
+        // the channel's interrupt, and once the ESC answers it never applies.
+        if (rx_pending_) {
+            rmt_disable(rx_channel_);
+            rmt_enable(rx_channel_);
+            rx_pending_ = false;
+            stale_reset_count_++;
+        }
+        if (rmt_receive(rx_channel_, rx_buf_, sizeof(rx_buf_), &rx_config_) == ESP_OK) {
+            rx_pending_ = true;
+            rx_armed_count_++;
+        } else {
             arm_fail_count_++;
         }
+        const uint32_t dt = esp_cpu_get_cycle_count() - t0;
+        arm_cyc_last_ = dt;
+        if (dt > arm_cyc_max_) arm_cyc_max_ = dt;
     }
 }
 
 void IRAM_ATTR DshotDriver::enable_rx() {
+    // Hand the line to the ESC: open drain so our idle-high is released.
     gpio_ll_od_enable(&GPIO, gpio_);
-    if (rmt_enable(rx_channel_) != ESP_OK) {
-        arm_fail_count_++;
-    }
 }
 
 void IRAM_ATTR DshotDriver::disable_rx() {
-    rmt_disable(rx_channel_);
     gpio_ll_od_disable(&GPIO, gpio_);
 }
 

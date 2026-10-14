@@ -10,7 +10,6 @@
 #include "esp_err.h"
 
 #include "channel_types.h"
-#include "telemetry_types.h"
 #include "rc_backend.h"
 
 
@@ -28,6 +27,7 @@ class Backend;
  */
 struct ReceiverConfig {
     uint32_t per_protocol_timeout_ms = 1000;  // Time to test each protocol before moving to next
+    uint32_t max_retries = 0;                 // 0 = retry forever
 };
 
 /**
@@ -49,18 +49,6 @@ public:
     esp_err_t setup(const uart_pins_t& pins, const ReceiverConfig& config = ReceiverConfig{});
 
     esp_err_t register_backend(const Backend* b);
-
-    // Telemetry transmission methods
-    esp_err_t send_battery(const telemetry::BatteryTelemetry& data);
-    esp_err_t send_gps(const telemetry::GpsTelemetry& data);
-    esp_err_t send_attitude(const telemetry::AttitudeTelemetry& data);
-    esp_err_t send_link_stats(const telemetry::LinkStatsTelemetry& data);
-    esp_err_t send_airspeed(const telemetry::AirspeedTelemetry& data);
-    esp_err_t send_flight_mode(const telemetry::FlightModeTelemetry& data);
-    esp_err_t send_temp(const telemetry::TempTelemetry& data);
-    esp_err_t send_rpm(const telemetry::RpmTelemetry& data);
-    esp_err_t send_accelgyro(const telemetry::AccelGyroTelemetry& data);
-    bool supports_telemetry() const;
 
     Receiver(const Receiver&) = delete; // Disable copy constructor
     Receiver& operator=(const Receiver&) = delete; // Disable copy assignment operator

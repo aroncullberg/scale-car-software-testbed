@@ -1,5 +1,5 @@
 #include "power_monitor.h"
-#include "telemetry.h"
+#include "blackboard/blackboard.h"
 #include "esp_log.h"
 #include <algorithm>
 
@@ -216,42 +216,18 @@ void PowerMonitor::sampling_task() {
         uint32_t consumed = static_cast<uint32_t>(consumed_mah_accum_);
         uint8_t pct = voltage_to_remaining_pct(v_mv);
 
-        voltage_mv_.store(v_mv, std::memory_order_relaxed);
-        current_ma_.store(i_ma, std::memory_order_relaxed);
-        consumed_mah_.store(consumed, std::memory_order_relaxed);
-        remaining_pct_.store(pct, std::memory_order_relaxed);
-        valid_reading_.store(true, std::memory_order_relaxed);
-
-        telemetry::BatteryTelemetry bat{};
-        bat.voltage_mv = static_cast<uint16_t>(std::min(v_mv, (int32_t)UINT16_MAX));
-        bat.current_ma = static_cast<uint16_t>(std::min(i_ma, (int32_t)UINT16_MAX));
-        bat.capacity_mah = consumed;
-        bat.remaining_pct = pct;
-        telemetry::publish(bat);
+        blackboard::publish(PowerMonitor::Reading{
+            .voltage_mv = v_mv,
+            .current_ma = i_ma,
+            .consumed_mah = consumed,
+            .remaining_pct = pct,
+            .cell_count = config_.cell_count,
+            .valid = true,
+        });
 
         // ESP_LOGI(TAG, "V:%ldmV  I:%ldmA (adc:%ldmV)  used:%lumAh  rem:%u%%",
         //          v_mv, i_ma, i_adc_mv, consumed, pct);
 
         vTaskDelayUntil(&last_wake, interval);
     }
-}
-
-int32_t PowerMonitor::get_voltage_mv() const {
-    return voltage_mv_.load(std::memory_order_relaxed);
-}
-
-int32_t PowerMonitor::get_current_ma() const {
-    return current_ma_.load(std::memory_order_relaxed);
-}
-
-uint32_t PowerMonitor::get_consumed_mah() const {
-    return consumed_mah_.load(std::memory_order_relaxed);
-}
-
-uint8_t PowerMonitor::get_remaining_pct() const {
-    return remaining_pct_.load(std::memory_order_relaxed);
-}
-
-bool PowerMonitor::has_valid_reading() const {
-    return valid_reading_.load(std::memory_order_relaxed);
 }

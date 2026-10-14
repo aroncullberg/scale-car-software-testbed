@@ -35,7 +35,13 @@ static constexpr uint16_t DSHOT_NEUTRAL = 0;
 
 static constexpr uint16_t THROTTLE_MIN = 48;
 static constexpr uint16_t THROTTLE_MAX = 2047;
-static constexpr uint32_t ARM_DELAY_MS = 3200;
+// AM32 arms after roughly a second of zero-throttle frames, but it only starts
+// counting once it has locked onto the signal, and that lock takes a variable
+// few seconds. Telemetry coming back is the only evidence we have of it, so the
+// hold is timed from there. The timeout is the fallback for a wheel whose
+// telemetry never arrives.
+static constexpr uint32_t ARM_HOLD_MS = 1500;
+static constexpr uint32_t ARM_DETECT_TIMEOUT_MS = 15000;
 
 // Which half of the split range is this wheel's forward. Static per wheel,
 // decided by how the motor is physically mounted.

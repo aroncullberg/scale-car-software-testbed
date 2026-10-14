@@ -1,11 +1,13 @@
 idf_component_register(
     SRCS
         "main.cpp"
+        "pin_test.cpp"
     INCLUDE_DIRS
         "."
     REQUIRES
         rc
         servo
+        motor
         vehicle
         power_monitor
         nav

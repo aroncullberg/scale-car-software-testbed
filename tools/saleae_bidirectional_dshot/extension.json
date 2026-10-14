@@ -1,0 +1,13 @@
+{
+  "name": "Bidirectional DShot Analyzer",
+  "apiVersion": "1.0.0",
+  "author": "Antigravity",
+  "version": "1.0.0",
+  "description": "High-Level Analyzer (HLA) for Saleae Logic 2 supporting Bidirectional DShot (BDshot), GCR 5b/4b telemetry decoding, eRPM/RPM calculation, and standard DShot (150/300/600/1200).",
+  "extensions": {
+    "Bidirectional DShot": {
+      "type": "HighLevelAnalyzer",
+      "entryPoint": "BidirectionalDshot.Hla"
+    }
+  }
+}

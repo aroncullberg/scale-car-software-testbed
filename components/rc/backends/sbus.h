@@ -53,7 +53,6 @@ namespace proto
         // Simplified interface
         esp_err_t start(const rclink::uart_pins_t& pins, uint32_t timeout_ms) override;
         esp_err_t stop() override;
-        bool supports_telemetry() const override { return false; }
 
         SbusDriver(const SbusDriver&) = delete;
         SbusDriver& operator=(const SbusDriver&) = delete;
