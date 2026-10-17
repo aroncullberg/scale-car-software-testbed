@@ -1,6 +1,11 @@
-## IDF Component Manager Manifest File
 dependencies:
-  ## Required IDF version
-  idf:
-    version: '>=4.1.0'
-
+  idf: ">=6.1,<6.2"
+  esp32-rclink:
+    git: https://github.com/aroncullberg/esp32-rclink.git
+    version: 14ea6db59a7d3e820405739e0ca051addcffa785
+  esp32-dshot:
+    git: https://github.com/aroncullberg/esp32-dshot.git
+    version: 42f7a001c61867db0a2a4cc0d343bdbc2305f520
+  esp32-esc-passthrough:
+    git: https://github.com/aroncullberg/esp32-esc-passthrough.git
+    version: bcd394e0ae36c92cc9560939b53e60a80d6c64ef

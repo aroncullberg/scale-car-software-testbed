@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <atomic>
+
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
@@ -40,6 +42,9 @@ namespace proto
         esp_err_t init();
         esp_err_t start();
         esp_err_t stop();
+        using SampleObserver = void (*)(void*, const nav::GpsSample&);
+        esp_err_t set_observer(SampleObserver observer, void* context);
+        esp_err_t configuration_error() const { return configuration_error_.load(); }
 
         NmeaDriver(const NmeaDriver &) = delete;
         NmeaDriver &operator=(const NmeaDriver &) = delete;
@@ -55,7 +60,6 @@ namespace proto
         void run();
         void ingest(const char* data, size_t len);
 
-        static constexpr char TAG[]         = "NmeaDriver";
         static constexpr char PATTERN_CHAR  = '\n';
         static constexpr size_t SENTENCE_MAX = 512;
         static constexpr size_t UBX_FRAME_MAX = 128;
@@ -65,7 +69,10 @@ namespace proto
         QueueHandle_t   uart_queue_{nullptr};
         bool            running_{false};
         int             active_baud_{0};
+        std::atomic<esp_err_t> configuration_error_{ESP_OK};
         TinyGPSPlus     gps_{};
+        SampleObserver observer_ = nullptr;
+        void* observer_context_ = nullptr;
     };
 
 }

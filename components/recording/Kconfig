@@ -1,0 +1,9 @@
+menu "Car recording"
+    config CAR_LOG_QUEUE_RECORDS
+        int "Maximum queued records"
+        range 64 512
+        default 128
+        help
+            Producers enqueue without waiting for SD. Exhaustion records a
+            dropout instead of blocking vehicle control.
+endmenu

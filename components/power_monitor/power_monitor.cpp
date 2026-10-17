@@ -1,6 +1,5 @@
 #include "power_monitor.h"
-#include "blackboard/blackboard.h"
-#include "esp_log.h"
+#include "esp_timer.h"
 #include <algorithm>
 
 struct LutEntry {
@@ -48,6 +47,7 @@ static esp_err_t init_adc(adc_unit_t unit, adc_channel_t channel, adc_atten_t at
                            adc_cali_handle_t* out_cali, bool* out_calibrated) {
     adc_oneshot_unit_init_cfg_t init_cfg = {
         .unit_id = unit,
+        .clk_src = ADC_RTC_CLK_SRC_DEFAULT,
         .ulp_mode = ADC_ULP_MODE_DISABLE,
     };
     esp_err_t ret = adc_oneshot_new_unit(&init_cfg, out_handle);
@@ -63,6 +63,7 @@ static esp_err_t init_adc(adc_unit_t unit, adc_channel_t channel, adc_atten_t at
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
     adc_cali_curve_fitting_config_t cali_cfg = {
         .unit_id = unit,
+        .chan = channel,
         .atten = atten,
         .bitwidth = ADC_BITWIDTH_12,
     };
@@ -89,39 +90,45 @@ esp_err_t PowerMonitor::init(const Config& config) {
     esp_err_t ret = init_adc(config_.voltage_adc_unit, config_.voltage_channel, config_.attenuation,
                               &voltage_adc_handle_, &voltage_cali_handle_, &voltage_calibrated_);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Voltage ADC init failed: %s", esp_err_to_name(ret));
+
         return ret;
     }
 
     ret = init_adc(config_.current_adc_unit, config_.current_channel, config_.attenuation,
                     &current_adc_handle_, &current_cali_handle_, &current_calibrated_);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Current ADC init failed: %s", esp_err_to_name(ret));
+
         return ret;
     }
 
-    ESP_LOGI(TAG, "Initialized — V: ratio=%.2f | I: scale=%u (x0.1 mV/A) | %u cells %lumAh",
-             voltage_divider_ratio_, config_.current_scale_x10mv_per_a,
-             config_.cell_count, config_.battery_capacity_mah);
 
+
+    return ESP_OK;
+}
+
+esp_err_t PowerMonitor::set_observer(ReadingObserver observer, void* context) {
+    if (task_handle_) return ESP_ERR_INVALID_STATE;
+    observer_ = observer;
+    observer_context_ = context;
     return ESP_OK;
 }
 
 esp_err_t PowerMonitor::start() {
     if (task_handle_) {
-        ESP_LOGW(TAG, "Already running");
+
         return ESP_ERR_INVALID_STATE;
     }
 
+    // ADC conversions mask interrupts locally; keep them off DShot's CPU.
     BaseType_t r = xTaskCreatePinnedToCore(
-        task_entry, "power_mon", 3072, this, 3, &task_handle_, 0);
+        task_entry, "power_mon", 3072, this, 3, &task_handle_, 1);
 
     if (r != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create task");
+
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "Sampling task started");
+
     return ESP_OK;
 }
 
@@ -129,7 +136,7 @@ void PowerMonitor::stop() {
     if (task_handle_) {
         vTaskDelete(task_handle_);
         task_handle_ = nullptr;
-        ESP_LOGI(TAG, "Sampling task stopped");
+
     }
 }
 
@@ -204,7 +211,7 @@ void PowerMonitor::sampling_task() {
             zero_cal_count_++;
             if (zero_cal_count_ == ZERO_CAL_SAMPLES) {
                 current_offset_mv_ = zero_cal_min_;
-                ESP_LOGI(TAG, "Current sensor auto-zero: offset=%ldmV", current_offset_mv_);
+
             }
             vTaskDelayUntil(&last_wake, interval);
             continue;
@@ -216,18 +223,26 @@ void PowerMonitor::sampling_task() {
         uint32_t consumed = static_cast<uint32_t>(consumed_mah_accum_);
         uint8_t pct = voltage_to_remaining_pct(v_mv);
 
-        blackboard::publish(PowerMonitor::Reading{
+        const Reading result{
             .voltage_mv = v_mv,
             .current_ma = i_ma,
             .consumed_mah = consumed,
             .remaining_pct = pct,
             .cell_count = config_.cell_count,
             .valid = true,
-        });
-
-        // ESP_LOGI(TAG, "V:%ldmV  I:%ldmA (adc:%ldmV)  used:%lumAh  rem:%u%%",
-        //          v_mv, i_ma, i_adc_mv, consumed, pct);
+        };
+        portENTER_CRITICAL(&reading_lock_);
+        reading_ = result;
+        portEXIT_CRITICAL(&reading_lock_);
+        if (observer_) observer_(observer_context_, esp_timer_get_time(), result);
 
         vTaskDelayUntil(&last_wake, interval);
     }
+}
+
+PowerMonitor::Reading PowerMonitor::reading() const {
+    portENTER_CRITICAL(&reading_lock_);
+    const auto result = reading_;
+    portEXIT_CRITICAL(&reading_lock_);
+    return result;
 }

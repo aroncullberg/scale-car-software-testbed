@@ -2,7 +2,6 @@
 /cmake-build-debug
 
 /managed_components
-/dependencies.lock
 
 /.zed
 /.claude
@@ -19,7 +18,21 @@
 
 /package-lock.json
 /package.json
-/CLAUDE.md
 
-# Component summaries (AI-generated)
-**/SUMMARY.md
+# Local documentation, tooling, tests, research and reference assets.
+/cmake/
+/docs/
+/tools/
+/tests/
+/research/
+/resources/
+*.sal
+*.md
+!README.md
+
+# Isolated 2026 firmware build/config; preserve the previous sdkconfig.
+/build-2026
+/sdkconfig.2026
+/sdkconfig.2026.old
+**/__pycache__/
+*.pyc

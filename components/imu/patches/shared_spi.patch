@@ -1,0 +1,211 @@
+--- a/source/BNO08x.cpp
++++ b/source/BNO08x.cpp
+@@ -208,7 +208,8 @@
+             }
+         }
+ 
+-        if (evt_grp_bno08x_task_bits & EVT_GRP_BNO08x_TASK_HINT_ASSRT_BIT)
++        if ((evt_grp_bno08x_task_bits & EVT_GRP_BNO08x_TASK_HINT_ASSRT_BIT) ||
++            gpio_get_level(imu_config.io_int) == 0)
+         {
+             lock_sh2_HAL();
+             sh2_service();
+@@ -216,7 +217,7 @@
+         }
+ 
+         evt_grp_bno08x_task_bits = xEventGroupWaitBits(sync_ctx.evt_grp_task,
+-                EVT_GRP_BNO08x_TASK_HINT_ASSRT_BIT | EVT_GRP_BNO08x_TASK_RESET_OCCURRED, pdFALSE, pdFALSE, portMAX_DELAY);
++                EVT_GRP_BNO08x_TASK_HINT_ASSRT_BIT | EVT_GRP_BNO08x_TASK_RESET_OCCURRED, pdFALSE, pdFALSE, pdMS_TO_TICKS(10));
+ 
+         // clang-format off
+         #ifdef CONFIG_ESP32_BNO08x_DEBUG_STATEMENTS
+@@ -718,22 +719,7 @@
+ {
+     esp_err_t ret = ESP_OK;
+ 
+-    // initialize the spi peripheral
+-    ret = spi_bus_initialize(imu_config.spi_peripheral, &bus_config, SPI_DMA_CH_AUTO);
+-    if (ret != ESP_OK)
+-    {
+-        // clang-format off
+-        #ifdef CONFIG_ESP32_BNO08x_LOG_STATEMENTS
+-        ESP_LOGE(TAG, "Initialization failed, SPI bus failed to initialize.");
+-        #endif
+-        // clang-format on
+-
+-        return ret;
+-    }
+-    else
+-    {
+-        init_status.spi_bus = true;
+-    }
++    // The application initializes and owns the shared SPI host.
+ 
+     // add the imu device to the bus
+     ret = spi_bus_add_device(imu_config.spi_peripheral, &imu_spi_config, &spi_hdl);
+@@ -962,23 +948,6 @@
+         }
+ 
+         init_status.spi_device = false;
+-    }
+-
+-    if (init_status.spi_bus)
+-    {
+-        ret = spi_bus_free(imu_config.spi_peripheral);
+-        if (ret != ESP_OK)
+-        {
+-            // clang-format off
+-            #ifdef CONFIG_ESP32_BNO08x_LOG_STATEMENTS
+-            ESP_LOGE(TAG, "Deconstruction failed, could free SPI peripheral.");
+-            #endif
+-            // clang-format on
+-
+-            return ret;
+-        }
+-
+-        init_status.spi_bus = false;
+     }
+ 
+     return ret;
+@@ -1811,6 +1780,13 @@
+  */
+ esp_err_t BNO08x::wait_for_hint()
+ {
++    // The interrupt may already be asserted while another device owns SPI.
++    if (gpio_get_level(imu_config.io_int) == 0)
++    {
++        xEventGroupClearBits(sync_ctx.evt_grp_task, EVT_GRP_BNO08x_TASK_HINT_ASSRT_BIT);
++        return ESP_OK;
++    }
++
+     EventBits_t spi_evt_bits;
+ 
+     spi_evt_bits = xEventGroupWaitBits(
+--- a/source/BNO08xSH2HAL.cpp
++++ b/source/BNO08xSH2HAL.cpp
+@@ -5,6 +5,48 @@
+ 
+ #include "BNO08xSH2HAL.hpp"
+ #include "BNO08x.hpp"
++
++
++namespace {
++class SelectedSpiDevice {
++public:
++    SelectedSpiDevice(spi_device_handle_t device, gpio_num_t chip_select, gpio_num_t ready_pin)
++        : device_(device), chip_select_(chip_select),
++          acquired_(false)
++    {
++        acquired_ = spi_device_acquire_bus(device, portMAX_DELAY) == ESP_OK;
++        if (acquired_ && gpio_get_level(ready_pin) != 0) {
++            spi_device_release_bus(device_);
++            acquired_ = false;
++        }
++        if (acquired_) {
++            // ESP32-S3 latches clock polarity when a transaction starts.
++            // Apply mode 3 while CS is high before selecting the IMU.
++            spi_transaction_t setup{};
++            if (spi_device_polling_transmit(device_, &setup) != ESP_OK) {
++                spi_device_release_bus(device_);
++                acquired_ = false;
++                return;
++            }
++            gpio_set_level(chip_select_, 0);
++        }
++    }
++    ~SelectedSpiDevice()
++    {
++        if (acquired_) {
++            gpio_set_level(chip_select_, 1);
++            spi_device_release_bus(device_);
++        }
++    }
++    explicit operator bool() const { return acquired_; }
++    SelectedSpiDevice(const SelectedSpiDevice&) = delete;
++    SelectedSpiDevice& operator=(const SelectedSpiDevice&) = delete;
++private:
++    spi_device_handle_t device_;
++    gpio_num_t chip_select_;
++    bool acquired_;
++};
++}
+ 
+ BNO08x* BNO08xSH2HAL::imu;
+ 
+@@ -55,29 +97,26 @@
+  */
+ int BNO08xSH2HAL::spi_read(sh2_Hal_t* self, uint8_t* pBuffer, unsigned len, uint32_t* t_us)
+ {
+-    uint16_t packet_sz = 0;
+-
+-    // hint never asserted, fail transaction
+-    if (!spi_wait_for_int())
+-        return 0;
+-
+-    // assert chip select
+-    gpio_set_level(imu->imu_config.io_cs, 0);
+-
+-    packet_sz = spi_read_sh2_packet_header(pBuffer);
+-
+-    if ((packet_sz > len) || (packet_sz == 0))
+-    {
+-        gpio_set_level(imu->imu_config.io_cs, 1);
+-        return 0;
+-    }
+-
+-    packet_sz = spi_read_sh2_packet_body(pBuffer, packet_sz);
+-
+-    // de-assert chip select
+-    gpio_set_level(imu->imu_config.io_cs, 1);
+-
+-    return packet_sz;
++    if (len < 4) return 0;
++    xEventGroupClearBits(imu->sync_ctx.evt_grp_task,
++                        BNO08xPrivateTypes::EVT_GRP_BNO08x_TASK_HINT_ASSRT_BIT);
++    // SH2 polls this callback too: no pending packet is not a sensor fault.
++    if (gpio_get_level(imu->imu_config.io_int) != 0)
++    {
++        // SH2's synchronous command loop also polls here during startup.
++        vTaskDelay(1);
++        return 0;
++    }
++
++    SelectedSpiDevice transaction(imu->spi_hdl, imu->imu_config.io_cs, imu->imu_config.io_int);
++    if (!transaction) return 0;
++
++    const uint16_t packet_sz = spi_read_sh2_packet_header(pBuffer);
++    if (packet_sz < 4 || packet_sz > len) {
++        return 0;
++    }
++    if (packet_sz == 4) return 4;
++    return spi_read_sh2_packet_body(pBuffer, packet_sz);
+ }
+ 
+ /**
+@@ -102,13 +141,12 @@
+     imu->spi_transaction.rx_buffer = NULL;
+     imu->spi_transaction.flags = 0;
+ 
+-    gpio_set_level(imu->imu_config.io_cs, 0);                         // assert chip select
++    SelectedSpiDevice transaction(imu->spi_hdl, imu->imu_config.io_cs, imu->imu_config.io_int);
++    if (!transaction) return 0;
+ 
+     // send data packet
+     if(spi_device_polling_transmit(imu->spi_hdl, &imu->spi_transaction) != ESP_OK)
+         return 0;
+-
+-    gpio_set_level(imu->imu_config.io_cs, 1);                         // de-assert chip select
+ 
+     return len;
+ }
+@@ -224,8 +262,8 @@
+ {
+     imu->spi_transaction.rx_buffer = pBuffer + 4;
+     imu->spi_transaction.tx_buffer = NULL;
+-    imu->spi_transaction.length = packet_sz * 8;
+-    imu->spi_transaction.rxlength = packet_sz * 8;
++    imu->spi_transaction.length = (packet_sz - 4) * 8;
++    imu->spi_transaction.rxlength = (packet_sz - 4) * 8;
+     imu->spi_transaction.flags = 0;
+ 
+     if (spi_device_polling_transmit(imu->spi_hdl, &imu->spi_transaction) != ESP_OK)

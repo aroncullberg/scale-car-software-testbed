@@ -1,66 +1,30 @@
 #pragma once
 
 #include <cstdint>
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
-#include "led_strip.h"
+#include "esp_err.h"
+#include "led/frame.hpp"
+
+struct led_strip_t;
 
 namespace led {
 
-/**
- * @brief Self-initializing RGB LED singleton
- *
- * Auto-initializes on first use with GPIO48 and SPI3 backend.
- * Thread-safe for concurrent access from multiple tasks.
- * Last write wins - no priority system.
- *
- * Usage:
- * @code
- * led::Rgb::instance().set_color(255, 0, 0);  // Red
- * led::Rgb::instance().set_color(0, 255, 0);  // Green
- * led::Rgb::instance().off();
- * @endcode
- */
-class Rgb {
-public:
-    static Rgb& instance();
+// One SPI3/DMA strip buffer is routed to the existing three light outputs.
+// Use from the vehicle task; DShot owns every RMT channel on the S3.
+class Controller {
+  public:
+    Controller() = default;
+    ~Controller();
+    Controller(const Controller&) = delete;
+    Controller& operator=(const Controller&) = delete;
+    esp_err_t start();
+    esp_err_t update(const Frame& frame);
+    void stop();
 
-    /**
-     * @brief Set LED color
-     * @param r Red value (0-255)
-     * @param g Green value (0-255)
-     * @param b Blue value (0-255)
-     */
-    void set_color(uint8_t r, uint8_t g, uint8_t b);
-    void off();
-
-    /**
-     * @brief Multiplexed refresh for secondary or main strip sharing SPI3
-     */
-    void refresh_strip_gpio(int target_gpio, int num_leds, const uint8_t pixels[][3]);
-
-    // Delete copy/move
-    Rgb(const Rgb&) = delete;
-    Rgb& operator=(const Rgb&) = delete;
-    Rgb(Rgb&&) = delete;
-    Rgb& operator=(Rgb&&) = delete;
-
-private:
-    Rgb() = default;
-    ~Rgb();
-
-    void ensure_initialized();
-    void refresh_strip_gpio_nolock(int target_gpio, int num_leds, const uint8_t pixels[][3]);
-
-    bool initialized_ = false;
-    bool init_failed_ = false;
-    led_strip_handle_t strip_ = nullptr;
-
-    uint8_t current_r_ = 0;
-    uint8_t current_g_ = 0;
-    uint8_t current_b_ = 0;
-
-    SemaphoreHandle_t mutex_ = nullptr;
+  private:
+    esp_err_t refresh(int gpio, int count, const Color* pixels);
+    led_strip_t* strip_{nullptr};
+    Frame last_frame_{};
+    bool frame_written_ = false;
 };
 
 } // namespace led

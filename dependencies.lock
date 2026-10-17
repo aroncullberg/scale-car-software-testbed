@@ -1,0 +1,92 @@
+dependencies:
+  andyfinity/TinyGPSPlus-ESPIDF:
+    component_hash: 369c54045e27d28bb205aed87c124c7d9cec04db004dbbdcb550a80fdab5cfb1
+    dependencies: []
+    source:
+      git: https://github.com/andyfinity/TinyGPSPlus-ESPIDF
+      path: .
+      type: git
+    version: 6e4c7e632746e312f65f1b98cdf380fbf29542ad
+  esp32-dshot:
+    component_hash: 4f2876fb8ae399c8734ddcd1fdfd1c85195de26588f02f05eece8df8aaab42b9
+    dependencies:
+    - name: idf
+      version: '>=6.1,<6.2'
+    source:
+      git: https://github.com/aroncullberg/esp32-dshot.git
+      path: .
+      type: git
+    targets:
+    - esp32s3
+    - esp32c3
+    version: 42f7a001c61867db0a2a4cc0d343bdbc2305f520
+  esp32-esc-passthrough:
+    component_hash: b093106ac8f4982d216a84ae22381899dae2aca42e0d9fb0ed49178f7a295b4e
+    dependencies:
+    - name: idf
+      version: '>=6.1,<6.2'
+    source:
+      git: https://github.com/aroncullberg/esp32-esc-passthrough.git
+      path: .
+      type: git
+    targets:
+    - esp32c3
+    - esp32s3
+    version: bcd394e0ae36c92cc9560939b53e60a80d6c64ef
+  esp32-rclink:
+    component_hash: f039bf73bd0826bbd39458e11882dfa2fa9384080a54bf8ccdfa58b605fc2022
+    dependencies:
+    - name: idf
+      version: '>=6.1,<6.2'
+    source:
+      git: https://github.com/aroncullberg/esp32-rclink.git
+      path: .
+      type: git
+    targets:
+    - esp32c3
+    - esp32s3
+    version: 14ea6db59a7d3e820405739e0ca051addcffa785
+  espressif/cjson:
+    component_hash: e788323270d90738662d66fffa910bfe1fba019bba087f01557e70c40485b469
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.7.19~2
+  espressif/led_strip:
+    component_hash: 097f698887601de00bed7ff58f91b9e074fa1ae1bcf53582034b01191cc88e9f
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.2'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 3.1.0~1
+  idf:
+    source:
+      type: idf
+    version: 6.1.0
+  myles-parfeniuk/esp32_BNO08x:
+    component_hash: ab3b9e61951518c8bc2f1ec113974d7f43fc181011b752a1a16b65f090b3297b
+    dependencies: []
+    source:
+      git: https://github.com/myles-parfeniuk/esp32_BNO08x
+      path: .
+      type: git
+    version: fdb99db225fc28f17de0d430a486c182aef927a2
+direct_dependencies:
+- andyfinity/TinyGPSPlus-ESPIDF
+- esp32-dshot
+- esp32-esc-passthrough
+- esp32-rclink
+- espressif/cjson
+- espressif/led_strip
+- idf
+- myles-parfeniuk/esp32_BNO08x
+manifest_hash: 8a947b401348d85786ff0d931e9296c4603e273c0a3a9e37a5ead205bd755d51
+target: esp32s3
+version: 3.0.0

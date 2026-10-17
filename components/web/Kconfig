@@ -1,0 +1,12 @@
+menu "Car Wi-Fi interface"
+    config CAR_WIFI_SSID
+        string "Access point name"
+        default "car-2026"
+    config CAR_WIFI_PASSWORD
+        string "Access point password (8-63 characters)"
+        default "car-2026"
+    config CAR_WIFI_CHANNEL
+        int "Access point channel"
+        range 1 13
+        default 1
+endmenu

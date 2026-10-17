@@ -9,5 +9,4 @@ idf_component_register(
         myles-parfeniuk__esp32_BNO08x
         driver
         esp_timer
-        blackboard
 )

@@ -6,7 +6,6 @@
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
-#include "blackboard/blackboard.h"
 
 class PowerMonitor {
 public:
@@ -28,7 +27,7 @@ public:
         // Current channel (ESC analog output)
         adc_unit_t current_adc_unit;
         adc_channel_t current_channel;
-        uint16_t current_scale_x10mv_per_a; // Betaflight convention: e.g. 386 = 38.6 mV/A
+        uint16_t current_scale_x10mv_per_a; // Betaflight convention: e.g. 90 = 9 mV/A
 
         // Shared ADC settings
         adc_atten_t attenuation = ADC_ATTEN_DB_12;
@@ -46,8 +45,11 @@ public:
     PowerMonitor& operator=(const PowerMonitor&) = delete;
 
     esp_err_t init(const Config& config);
+    using ReadingObserver = void (*)(void*, uint64_t, const Reading&);
+    esp_err_t set_observer(ReadingObserver observer, void* context);
     esp_err_t start();
     void stop();
+    Reading reading() const;
 
 private:
     PowerMonitor() = default;
@@ -83,9 +85,8 @@ private:
     int32_t zero_cal_min_{INT32_MAX};
     int32_t current_offset_mv_{0};
 
-    static constexpr const char* TAG = "PowerMonitor";
+    mutable portMUX_TYPE reading_lock_ = portMUX_INITIALIZER_UNLOCKED;
+    Reading reading_{};
+    ReadingObserver observer_ = nullptr;
+    void* observer_context_ = nullptr;
 };
-
-namespace blackboard {
-template <> struct Topic<PowerMonitor::Reading> { static constexpr TopicId id = TopicId::battery; };
-}

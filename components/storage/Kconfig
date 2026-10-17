@@ -1,0 +1,27 @@
+menu "Car SD storage"
+    config CAR_SD_CLOCK_KHZ
+        int "SD SPI clock (kHz)"
+        range 400 20000
+        default 20000
+
+    config CAR_SD_READ_WRITE_TEST
+        bool "Run SD read/write verification at boot"
+        default n
+        help
+            After sensor startup, write and sync a new test file, read back
+            every byte and remove that file on success. Existing files are
+            never overwritten. Prints transfer rates, worst write/read/sync
+            times and IMU update gaps. Disable after bench validation.
+
+    config CAR_SD_TEST_SIZE_KIB
+        int "SD verification file size (KiB)"
+        depends on CAR_SD_READ_WRITE_TEST
+        range 64 65536
+        default 1024
+
+    config CAR_SD_TEST_TRANSFER_BYTES
+        int "SD verification transfer size (bytes)"
+        depends on CAR_SD_READ_WRITE_TEST
+        range 512 4096
+        default 4096
+endmenu

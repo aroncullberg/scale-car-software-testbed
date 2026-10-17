@@ -5,8 +5,6 @@
 #include <algorithm>
 
 #include "esp_timer.h"
-#include "esp_check.h"
-#include "esp_log.h"
 
 #include "gps.h"
 
@@ -34,18 +32,10 @@ namespace proto
     }
 
     esp_err_t NmeaDriver::init() {
-        ESP_RETURN_ON_ERROR(configureUart(), TAG, "UART cfg failed");
-
-        if (cfg_.configure_module) {
-            const esp_err_t err = configureModule();
-            if (err != ESP_OK) {
-                ESP_LOGW(TAG, "Module configuration failed (%s), using current settings",
-                         esp_err_to_name(err));
-            }
-        }
-
-        ESP_RETURN_ON_ERROR(enablePatternDetection(), TAG, "pattern det enable");
-        return ESP_OK;
+        const auto result = configureUart();
+        if (result != ESP_OK) return result;
+        configuration_error_ = cfg_.configure_module ? configureModule() : ESP_OK;
+        return enablePatternDetection();
     }
 
     esp_err_t NmeaDriver::start() {
@@ -62,12 +52,19 @@ namespace proto
             1 // Core 1
         );
         if (ok != pdPASS) {
-            ESP_LOGE(TAG, "Failed to create task");
+
             running_ = false;
             return ESP_FAIL;
         }
 
         running_ = true;
+        return ESP_OK;
+    }
+
+    esp_err_t NmeaDriver::set_observer(SampleObserver observer, void* context) {
+        if (running_) return ESP_ERR_INVALID_STATE;
+        observer_ = observer;
+        observer_context_ = context;
         return ESP_OK;
     }
 
@@ -81,53 +78,40 @@ namespace proto
         return ESP_OK;
     }
 
-
     esp_err_t NmeaDriver::configureUart() {
-        const uart_config_t uart_cfg = {
-            .baud_rate = cfg_.baud_rate,
-            .data_bits = UART_DATA_8_BITS,
-            .parity = UART_PARITY_DISABLE,
-            .stop_bits = UART_STOP_BITS_1,
-            .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-            .rx_flow_ctrl_thresh = 0,
-            .source_clk = UART_SCLK_APB,
-        };
-        ESP_RETURN_ON_ERROR(uart_driver_install(cfg_.uart_num,
-                                cfg_.rx_buffer_size,
-                                cfg_.tx_buffer_size,
-                                cfg_.pattern_queue_size,
-                                &uart_queue_,
-                                0),
-                            TAG, "driver install");
-        ESP_RETURN_ON_ERROR(uart_param_config(cfg_.uart_num, &uart_cfg), TAG, "param");
-        ESP_RETURN_ON_ERROR(uart_set_pin(cfg_.uart_num,
-                                cfg_.uart_tx_pin,
-                                cfg_.uart_rx_pin,
-                                UART_PIN_NO_CHANGE,
-                                UART_PIN_NO_CHANGE),
-                            TAG, "pin map");
+        uart_config_t uart_cfg{};
+        uart_cfg.baud_rate = cfg_.baud_rate;
+        uart_cfg.data_bits = UART_DATA_8_BITS;
+        uart_cfg.parity = UART_PARITY_DISABLE;
+        uart_cfg.stop_bits = UART_STOP_BITS_1;
+        uart_cfg.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
+        uart_cfg.source_clk = UART_SCLK_APB;
+        auto result = uart_driver_install(cfg_.uart_num, cfg_.rx_buffer_size,
+            cfg_.tx_buffer_size, cfg_.pattern_queue_size, &uart_queue_, 0);
+        if (result != ESP_OK) return result;
+        result = uart_param_config(cfg_.uart_num, &uart_cfg);
+        if (result != ESP_OK) return result;
+        result = uart_set_pin(cfg_.uart_num, cfg_.uart_tx_pin, cfg_.uart_rx_pin,
+                              UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+        if (result != ESP_OK) return result;
         active_baud_ = cfg_.baud_rate;
         return ESP_OK;
     }
 
     esp_err_t NmeaDriver::enablePatternDetection() {
-        ESP_RETURN_ON_ERROR(uart_enable_pattern_det_baud_intr(
-                                cfg_.uart_num,
-                                PATTERN_CHAR,
-                                1,
-                                9, // idle between two pattern characters
-                                0, // idle after the last pattern character
-                                0), // idle before the first pattern character
-                            TAG, "pattern det enable");
-        ESP_RETURN_ON_ERROR(uart_pattern_queue_reset(cfg_.uart_num, cfg_.pattern_queue_size),
-                            TAG, "pattern det queue reset");
+        auto result = uart_enable_pattern_det_baud_intr(cfg_.uart_num,
+            PATTERN_CHAR, 1, 9, 0, 0);
+        if (result != ESP_OK) return result;
+        result = uart_pattern_queue_reset(cfg_.uart_num, cfg_.pattern_queue_size);
+        if (result != ESP_OK) return result;
         uart_flush_input(cfg_.uart_num);
         xQueueReset(uart_queue_);
         return ESP_OK;
     }
 
     esp_err_t NmeaDriver::setUartBaud(int baud) {
-        ESP_RETURN_ON_ERROR(uart_set_baudrate(cfg_.uart_num, baud), TAG, "set baud");
+        const auto result = uart_set_baudrate(cfg_.uart_num, baud);
+        if (result != ESP_OK) return result;
         active_baud_ = baud;
         uart_flush_input(cfg_.uart_num);
         return ESP_OK;
@@ -190,10 +174,9 @@ namespace proto
             }
         }
         if (found == 0) {
-            ESP_LOGE(TAG, "No GPS output detected on any candidate baud rate");
+
             return ESP_ERR_NOT_FOUND;
         }
-        ESP_LOGI(TAG, "GPS responding at %d baud", found);
 
         // Only RMC (position, speed, course, time) and GGA (altitude, satellites, HDOP) are parsed,
         // every other sentence is dead weight on the link and directly caps the achievable rate.
@@ -223,11 +206,9 @@ namespace proto
 
         esp_err_t err = sendValset(frame, len, 1000);
         if (err != ESP_OK) {
-            ESP_LOGW(TAG, "Sentence/rate configuration not acknowledged: %s", esp_err_to_name(err));
+
             return err;
         }
-        ESP_LOGI(TAG, "Navigation rate set to %u ms, sentence set reduced to RMC + GGA",
-                 cfg_.meas_rate_ms);
 
         if (cfg_.target_baud_rate <= 0 || cfg_.target_baud_rate == found) return ESP_OK;
 
@@ -242,12 +223,10 @@ namespace proto
         sendValset(frame, len, 300);
 
         if (probeModule(cfg_.target_baud_rate, 1500)) {
-            ESP_LOGI(TAG, "Switched link to %d baud", cfg_.target_baud_rate);
+
             return ESP_OK;
         }
 
-        ESP_LOGW(TAG, "Module did not switch to %d baud, staying at %d",
-                 cfg_.target_baud_rate, found);
         return setUartBaud(found);
     }
 
@@ -257,7 +236,6 @@ namespace proto
     }
 
     void NmeaDriver::run() {
-        ESP_LOGI(TAG, "Task started at %d baud", active_baud_);
 
         Location location;
         Date date;
@@ -267,20 +245,17 @@ namespace proto
         Altitude altitude;
         Satellite satellites;
 
-        uint64_t prev_us = 0;
-        uint32_t prev_epoch_cs = UINT32_MAX;
-
         while (running_) {
             uart_event_t event{};
 
             if (xQueueReceive(uart_queue_, &event, portMAX_DELAY) != pdTRUE) {
-                ESP_LOGE(TAG, "Failed to receive UART event");
+
                 continue;
             }
 
             if (event.type != UART_PATTERN_DET) {
                 if (event.type == UART_FIFO_OVF || event.type == UART_BUFFER_FULL) {
-                    ESP_LOGW(TAG, "FIFO overflow");
+
                     uart_flush_input(cfg_.uart_num);
                 }
                 continue;
@@ -288,7 +263,7 @@ namespace proto
 
             int pos = uart_pattern_pop_pos(cfg_.uart_num);
             if (pos < 0 || pos > SENTENCE_MAX) {
-                ESP_LOGW(TAG, "No pattern detected or out of range (pat_pos: %d) (event.type: %d", pos, event.type);
+
                 uart_flush_input(cfg_.uart_num);
                 uart_pattern_queue_reset(cfg_.uart_num, cfg_.pattern_queue_size);
                 continue;
@@ -297,105 +272,107 @@ namespace proto
             char buf[SENTENCE_MAX + 1];
 
             int32_t len = uart_read_bytes(cfg_.uart_num, buf, pos + 1, 0);
-            if (len <= 0 || static_cast<size_t>(len) > sizeof(buf)) {
-                ESP_LOGE(TAG, "Failed to read UART data");
+            if (len <= 0 || static_cast<size_t>(len) >= sizeof(buf)) {
+
                 continue;
             }
 
             buf[len] = '\0';
-            ESP_LOGD(TAG, "%*s", (int)(len - 2),  buf);
 
             ingest(buf, static_cast<size_t>(len));
 
+            uint16_t updated_fields = 0;
+
             if (gps_.location.isUpdated()) {
+                updated_fields |= nav::GPS_LOCATION;
                 location.age = gps_.location.age();
                 location.lat_e7 = static_cast<int32_t>(gps_.location.lat() * 1e7);
-                // ESP_LOGI(TAG, "\tLocation lat: %ld", location.lat_e7);
                 location.lon_e7 = static_cast<int32_t>(gps_.location.lng() * 1e7);
-                // ESP_LOGI(TAG, "\tLocation lon: %ld", location.lon_e7);
                 location.isValid = gps_.location.isValid();
                 Gps::instance().setLocation(location);
             }
 
             if (gps_.date.isUpdated()) {
-                // ESP_LOGI(TAG, "Date updated");
+                updated_fields |= nav::GPS_DATE;
                 date.age = gps_.date.age();
                 date.year = gps_.date.year();
-                // ESP_LOGI(TAG, "\tDate year: %u", date.year);
                 date.month = gps_.date.month();
-                // ESP_LOGI(TAG, "\tDate month: %u", date.month);
                 date.day = gps_.date.day();
-                // ESP_LOGI(TAG, "\tDate day: %u", date.day);
                 date.isValid = gps_.date.isValid();
                 Gps::instance().setDate(date);
             }
 
             if (gps_.time.isUpdated()) {
-                // ESP_LOGI(TAG, "Time updated");
+                updated_fields |= nav::GPS_TIME;
                 time.age = gps_.time.age();
                 time.hour = gps_.time.hour();
                 time.minute = gps_.time.minute();
                 time.second = gps_.time.second();
-                // ESP_LOGI(TAG, "\t%2u:%2u:%2u", time.hour, time.minute, time.second);
                 time.centisecond = gps_.time.centisecond();
                 time.isValid = gps_.time.isValid();
                 Gps::instance().setTime(time);
 
-                // Every sentence in an epoch repeats the same timestamp, so this counts fixes
-                // rather than sentences.
-                const uint32_t epoch_cs = (time.hour * 360000u) + (time.minute * 6000u) +
-                                          (time.second * 100u) + time.centisecond;
-                if (epoch_cs != prev_epoch_cs) {
-                    const uint64_t now_us = esp_timer_get_time();
-                    if (prev_us) {
-                        ESP_LOGD(TAG, "Fix interval %llu ms", (now_us - prev_us) / 1000);
-                    }
-                    prev_us = now_us;
-                    prev_epoch_cs = epoch_cs;
-                }
             }
 
             if (gps_.speed.isUpdated()) {
-                // ESP_LOGI(TAG, "Speed updated");
+                updated_fields |= nav::GPS_SPEED;
                 speed.knots = static_cast<int32_t>(gps_.speed.knots());
-                // ESP_LOGI(TAG, "\tSpeed knots: %d", speed.knots);
-                // speed.speed_mmps = static_cast<int32_t>(gps_.speed.mps() * 1000);
-                // ESP_LOGI(TAG, "\tSpeed mphs: %d", speed.speed_mmps);
+                speed.speed_mmps = static_cast<int32_t>(gps_.speed.mps() * 1000);
                 speed.speed_kmph = static_cast<int32_t>(gps_.speed.kmph() * 10);
-                // ESP_LOGI(TAG, "\tSpeed kmph: %d", speed.speed_kmph);
 
                 Gps::instance().setSpeed(speed);
             }
 
             if (gps_.course.isUpdated()) {
-                // ESP_LOGI(TAG, "Course updated");
+                updated_fields |= nav::GPS_COURSE;
                 course.course_cd = static_cast<int32_t>(gps_.course.deg() * 100);
-                // ESP_LOGI(TAG, "\tCourse: %ld", course.course_cd);
                 Gps::instance().setCourse(course);
             }
 
             if (gps_.altitude.isUpdated()) {
-                // ESP_LOGI(TAG, "Altitude updated");
+                updated_fields |= nav::GPS_ALTITUDE;
                 altitude.altitude_m = static_cast<int32_t>(gps_.altitude.meters());
-                // ESP_LOGI(TAG, "\tAltitude: %d", altitude.altitude_m);
                 Gps::instance().setAltitude(altitude);
             }
 
             if (gps_.satellites.isUpdated()) {
-                // ESP_LOGI(TAG, "Satellites updated");
+                updated_fields |= nav::GPS_SATELLITES;
                 satellites.age = gps_.satellites.age();
-                // ESP_LOGI(TAG, "\tSatellites age: %d", satellites.age);
                 satellites.satellites = gps_.satellites.value();
-                // ESP_LOGI(TAG, "\tSatellites: %d", satellites.satellites);
                 satellites.isValid = gps_.satellites.isValid();
                 Gps::instance().setSatellite(satellites);
             }
 
             if (gps_.hdop.isUpdated()) {
+                updated_fields |= nav::GPS_HDOP;
                 HDOP hdop = gps_.hdop.value();
                 Gps::instance().setHDOP(hdop);
             }
 
+            if (observer_ && updated_fields) {
+                nav::GpsSample sample;
+                sample.timestamp_us = esp_timer_get_time();
+                sample.lat_e7 = location.lat_e7; sample.lon_e7 = location.lon_e7;
+                sample.altitude_mm = static_cast<int32_t>(gps_.altitude.meters() * 1000);
+                sample.speed_mmps = speed.speed_mmps; sample.course_cd = course.course_cd;
+                sample.satellites = satellites.satellites;
+                sample.location_age_ms = gps_.location.age();
+                sample.hdop_centi = gps_.hdop.value();
+                sample.year = date.year; sample.month = date.month; sample.day = date.day;
+                sample.hour = time.hour; sample.minute = time.minute;
+                sample.second = time.second; sample.centisecond = time.centisecond;
+                sample.updated_fields = updated_fields;
+                sample.valid_fields =
+                    (gps_.location.isValid() ? nav::GPS_LOCATION : 0) |
+                    (gps_.date.isValid() ? nav::GPS_DATE : 0) |
+                    (gps_.time.isValid() ? nav::GPS_TIME : 0) |
+                    (gps_.speed.isValid() ? nav::GPS_SPEED : 0) |
+                    (gps_.course.isValid() ? nav::GPS_COURSE : 0) |
+                    (gps_.altitude.isValid() ? nav::GPS_ALTITUDE : 0) |
+                    (gps_.satellites.isValid() ? nav::GPS_SATELLITES : 0) |
+                    (gps_.hdop.isValid() ? nav::GPS_HDOP : 0);
+                observer_(observer_context_, sample);
+            }
 
         }
     }

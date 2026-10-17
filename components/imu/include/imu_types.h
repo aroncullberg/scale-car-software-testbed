@@ -7,7 +7,6 @@
 #include <cstdint>
 #include "driver/gpio.h"
 #include "driver/spi_common.h"
-#include "blackboard/blackboard.h"
 
 namespace imu
 {
@@ -70,11 +69,3 @@ struct SpiConfig {
 };
 
 } // namespace imu
-
-namespace blackboard
-{
-template <> struct Topic<imu::AccelData> { static constexpr TopicId id = TopicId::accel; };
-template <> struct Topic<imu::GyroData>  { static constexpr TopicId id = TopicId::gyro;  };
-template <> struct Topic<imu::QuatData>  { static constexpr TopicId id = TopicId::quat;  };
-template <> struct Topic<imu::EulerData> { static constexpr TopicId id = TopicId::euler; };
-} // namespace blackboard
