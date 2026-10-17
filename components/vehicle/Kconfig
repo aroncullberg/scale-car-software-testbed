@@ -1,0 +1,53 @@
+menu "Car yaw-rate steering"
+    config CAR_YAW_RATE_MAX_DEG_S
+        int "Full-stick yaw rate (degrees/second)"
+        range 1 720
+        default 90
+        help
+            Requested body yaw rate at full steering input in CH14 low/mid.
+            CH6 continues to limit physical servo travel.
+
+    config CAR_YAW_RATE_PROPORTIONAL_X1000
+        int "Yaw-rate P gain (x1000)"
+        range 0 10000
+        default 250
+        help
+            Normalized steering output per rad/s of yaw-rate error, multiplied
+            by 1000. Start by tuning P with the I gain set to zero.
+
+    config CAR_YAW_RATE_INTEGRAL_X1000
+        int "Yaw-rate I gain (x1000)"
+        range 0 10000
+        default 100
+        help
+            Normalized steering output per accumulated radian of yaw-rate
+            error, multiplied by 1000. Only accumulates with motor motion.
+
+    config CAR_YAW_RATE_DERIVATIVE_X1000
+        int "Yaw-rate D gain (x1000)"
+        range 0 10000
+        default 0
+        help
+            Derivative of measured yaw rate, with a low-pass filter. Zero
+            disables D. Changing the requested yaw rate does not cause D kick.
+
+    config CAR_YAW_RATE_DERIVATIVE_CUTOFF_HZ
+        int "Yaw-rate D low-pass cutoff (Hz)"
+        range 1 30
+        default 10
+
+    config CAR_YAW_RATE_INTEGRAL_LIMIT_PERMILLE
+        int "Maximum integral steering correction (per mille)"
+        range 0 1000
+        default 250
+        help
+            250 limits the learned correction to 25% of center-to-end steering
+            travel. The CH6 travel limit and servo endpoints also apply.
+
+    config CAR_POSITIVE_STEERING_TURNS_LEFT
+        bool "Higher CH2 turns the wheels left"
+        default n
+        help
+            Match the existing direct steering direction. Gyro Z is positive
+            for left yaw. Leave disabled when higher CH2 steers right.
+endmenu

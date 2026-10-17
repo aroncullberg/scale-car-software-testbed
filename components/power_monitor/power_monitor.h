@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_err.h"
@@ -10,6 +9,15 @@
 
 class PowerMonitor {
 public:
+    struct Reading {
+        int32_t voltage_mv;
+        int32_t current_ma;
+        uint32_t consumed_mah;
+        uint8_t remaining_pct;
+        uint8_t cell_count;
+        bool valid;
+    };
+
     struct Config {
         // Voltage channel (battery via voltage divider)
         adc_unit_t voltage_adc_unit;
@@ -19,7 +27,7 @@ public:
         // Current channel (ESC analog output)
         adc_unit_t current_adc_unit;
         adc_channel_t current_channel;
-        uint16_t current_scale_x10mv_per_a; // Betaflight convention: e.g. 386 = 38.6 mV/A
+        uint16_t current_scale_x10mv_per_a; // Betaflight convention: e.g. 90 = 9 mV/A
 
         // Shared ADC settings
         adc_atten_t attenuation = ADC_ATTEN_DB_12;
@@ -37,14 +45,11 @@ public:
     PowerMonitor& operator=(const PowerMonitor&) = delete;
 
     esp_err_t init(const Config& config);
+    using ReadingObserver = void (*)(void*, uint64_t, const Reading&);
+    esp_err_t set_observer(ReadingObserver observer, void* context);
     esp_err_t start();
     void stop();
-
-    int32_t get_voltage_mv() const;
-    int32_t get_current_ma() const;
-    uint32_t get_consumed_mah() const;
-    uint8_t get_remaining_pct() const;
-    bool has_valid_reading() const;
+    Reading reading() const;
 
 private:
     PowerMonitor() = default;
@@ -71,12 +76,6 @@ private:
 
     TaskHandle_t task_handle_{nullptr};
 
-    std::atomic<int32_t> voltage_mv_{0};
-    std::atomic<int32_t> current_ma_{0};
-    std::atomic<uint32_t> consumed_mah_{0};
-    std::atomic<uint8_t> remaining_pct_{0};
-    std::atomic<bool> valid_reading_{false};
-
     // Coulomb counting accumulator (not atomic — only written from task)
     double consumed_mah_accum_{0.0};
 
@@ -86,5 +85,8 @@ private:
     int32_t zero_cal_min_{INT32_MAX};
     int32_t current_offset_mv_{0};
 
-    static constexpr const char* TAG = "PowerMonitor";
+    mutable portMUX_TYPE reading_lock_ = portMUX_INITIALIZER_UNLOCKED;
+    Reading reading_{};
+    ReadingObserver observer_ = nullptr;
+    void* observer_context_ = nullptr;
 };

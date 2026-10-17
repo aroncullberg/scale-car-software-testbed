@@ -65,4 +65,19 @@ namespace nav
     };
 
     using HDOP = uint16_t;
+
+    enum GpsField : uint16_t {
+        GPS_LOCATION = 1 << 0, GPS_DATE = 1 << 1, GPS_TIME = 1 << 2,
+        GPS_SPEED = 1 << 3, GPS_COURSE = 1 << 4, GPS_ALTITUDE = 1 << 5,
+        GPS_SATELLITES = 1 << 6, GPS_HDOP = 1 << 7,
+    };
+
+    struct GpsSample {
+        uint64_t timestamp_us = 0;
+        int32_t lat_e7 = 0, lon_e7 = 0, altitude_mm = 0, speed_mmps = 0, course_cd = 0;
+        uint32_t satellites = 0, location_age_ms = UINT32_MAX;
+        uint16_t hdop_centi = 0, year = 0;
+        uint8_t month = 0, day = 0, hour = 0, minute = 0, second = 0, centisecond = 0;
+        uint16_t updated_fields = 0, valid_fields = 0;
+    };
 }

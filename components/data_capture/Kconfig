@@ -1,0 +1,26 @@
+menu "Car data capture"
+    config CAR_RPM_CAPTURE_HZ
+        int "RPM logging poll rate (Hz)"
+        range 10 200
+        default 100
+        help
+            Poll the latest DShot feedback at this rate. Log only new samples,
+            retaining the original reply timestamp. Intermediate replies can
+            be missed; this does not capture every DShot frame. RC telemetry
+            remains at 10 Hz.
+
+    config CAR_WHEEL_DIAMETER_MM
+        int "Wheel diameter (mm)"
+        range 1 1000
+        default 68
+        help
+            Rolling wheel diameter used for the RPM-based ground-speed estimate.
+
+    config CAR_MOTOR_REVOLUTIONS_PER_WHEEL_X100
+        int "Motor revolutions per wheel revolution (x100)"
+        range 1 100000
+        default 177
+        help
+            Gear reduction multiplied by 100. A value of 177 means 1.77 motor
+            revolutions per wheel revolution; 100 means direct drive.
+endmenu

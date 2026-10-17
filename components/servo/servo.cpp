@@ -1,216 +1,145 @@
-// servo.cpp
-#include "servo.h"
+#include "servo/controller.hpp"
+
 #include <algorithm>
 
-Servo::Servo(const Config& config) : config_(config) {
-    init();
+#include "driver/gpio.h"
+
+namespace servo {
+namespace {
+constexpr ledc_mode_t mode = LEDC_LOW_SPEED_MODE;
+constexpr ledc_timer_t timer = LEDC_TIMER_0;
+constexpr ledc_timer_bit_t resolution = LEDC_TIMER_14_BIT;
 }
 
-Servo::~Servo() {
-    if (generator_) {
-        mcpwm_del_generator(generator_);
-    }
-    if (comparator_) {
-        mcpwm_del_comparator(comparator_);
-    }
-    if (operator_) {
-        mcpwm_del_operator(operator_);
-    }
-    if (timer_) {
-        mcpwm_del_timer(timer_);
-    }
+Controller::~Controller() {
+    stop();
 }
 
-esp_err_t Servo::init() {
-    // Calculate period based on frequency
-    uint32_t period_ticks = TIMEBASE_RESOLUTION_HZ / config_.freq_hz;
-
-    mcpwm_timer_config_t timer_config = {
-        .group_id = 0,
-        .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
-        .resolution_hz = TIMEBASE_RESOLUTION_HZ,
-        .count_mode = MCPWM_TIMER_COUNT_MODE_UP,
-        .period_ticks = period_ticks,
-    };
-    esp_err_t err = mcpwm_new_timer(&timer_config, &timer_);
-    if (err != ESP_OK) {
-        ESP_LOGE("servo", "Failed to create timer: %d", err);
-        return err;
-    }
-
-    mcpwm_operator_config_t operator_config = {
-        .group_id = 0,
-    };
-    err = mcpwm_new_operator(&operator_config, &operator_);
-    if (err != ESP_OK) {
-        ESP_LOGE("servo", "Failed to create operator: %d", err);
-        return err;
-    }
-
-    err = mcpwm_operator_connect_timer(operator_, timer_);
-    if (err != ESP_OK) {
-        ESP_LOGE("servo", "Failed to connect timer to operator: %d", err);
-        return err;
-    }
-
-    mcpwm_comparator_config_t comparator_config = {
-        .flags = {.update_cmp_on_tez = true}
-    };
-    err = mcpwm_new_comparator(operator_, &comparator_config, &comparator_);
-    if (err != ESP_OK) {
-        ESP_LOGE("servo", "Failed to create comparator: %d", err);
-        return err;
-    }
-
-    mcpwm_comparator_set_compare_value(comparator_, center_pulse_width_us_);
-
-    mcpwm_generator_config_t generator_config = {
-        .gen_gpio_num = config_.gpio_num,
-    };
-    err = mcpwm_new_generator(operator_, &generator_config, &generator_);
-    if (err != ESP_OK) {
-        ESP_LOGE("servo", "Failed to create generator: %d", err);
-        return err;
-    }
-
-    err = mcpwm_generator_set_action_on_timer_event(
-        generator_,
-        MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH)
-    );
-    if (err != ESP_OK) {
-        ESP_LOGE("servo", "Failed to set generator action on timer event: %d", err);
-        return err;
-    }
-
-    err = mcpwm_generator_set_action_on_compare_event(
-        generator_,
-        MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator_, MCPWM_GEN_ACTION_LOW)
-    );
-    if (err != ESP_OK) {
-        ESP_LOGE("servo", "Failed to set generator action on compare event: %d", err);
-        return err;
-    }
-
-    // Enable and start timer
-    err = mcpwm_timer_enable(timer_);
-    if (err != ESP_OK) {
-        ESP_LOGE("servo", "Failed to enable timer: %d", err);
-        return err;
-    }
-
-    err = mcpwm_timer_start_stop(timer_, MCPWM_TIMER_START_NO_STOP);
-    if (err != ESP_OK) {
-        ESP_LOGE("servo", "Failed to start timer: %d", err);
-        return err;
-    }
-
-    return ESP_OK;
-}
-
-
-
-
-uint32_t Servo::calculateCompareValue(const rclink::channel_value_t position) {
-    if (position > 2000) {
-        ESP_LOGW(TAG, "Position out of range: %u setting servo to failsafe position", position);
-        return std::clamp(static_cast<uint32_t>(config_.failsafe_position) + static_cast<uint32_t>(offset_),
-                          static_cast<uint32_t>(config_.min_pulse_width_us),
-                          static_cast<uint32_t>(config_.max_pulse_width_us));
-    }
-
-    // if (range_ < 0 || range_ > 75) {
-    //     ESP_LOGW(TAG, "Range out of bounds: %d, setting to default 20%%", range_);
-    //     range_ = std::clamp(range_, 0, 75);
-    // }
-
-    constexpr int32_t symmetric_offset = (2000 - 0) / 2; // RC channel range is 0-2000
-
-    const int32_t normalized_position = static_cast<int32_t>(position) - symmetric_offset;
-
-    const int32_t scaled_position = (normalized_position - 100)/ 2 * range_ / 100;
-
-    uint32_t pulse_width = center_pulse_width_us_ + offset_ + scaled_position; // Offset doesn't do anything anymore, but it's there for legacy (read: im lazy)
-
-    if (invert_steering_) {
-        pulse_width = config_.min_pulse_width_us + config_.max_pulse_width_us - pulse_width;
-    }
-
-    // ESP_LOGI(TAG, "Pulse width: %lu", pulse_width);
-
-    return std::clamp(pulse_width, static_cast<uint32_t>(config_.min_pulse_width_us), static_cast<uint32_t>(config_.max_pulse_width_us));
-}
-
-esp_err_t Servo::setPosition(const rclink::channel_value_t position)  {
-    if (!enabled_) {
+esp_err_t Controller::start(const OutputConfig *outputs, size_t count, uint32_t frequency_hz) {
+    if (timer_started_) {
         return ESP_ERR_INVALID_STATE;
     }
-    // ESP_LOGI(TAG, "Setting servo position: %d", calculateCompareValue(position));
-    return mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(position));
-}
-
-// Runtime configuration methods
-esp_err_t Servo::setCenterPoint(uint16_t center_us) {
-    if (center_us < config_.min_pulse_width_us || center_us > config_.max_pulse_width_us) {
-        ESP_LOGW(TAG, "Center point %u out of range [%d, %d]", center_us, config_.min_pulse_width_us, config_.max_pulse_width_us);
+    if (!outputs || count == 0 || count > max_outputs || frequency_hz < 40 || frequency_hz > 333) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (center_us != center_pulse_width_us_) {
-        center_pulse_width_us_ = center_us;
-        ESP_LOGI(TAG, "Center point updated to %u us", center_us);
+    for (size_t i = 0; i < count; ++i) {
+        const auto &output = outputs[i];
+        if (!GPIO_IS_VALID_OUTPUT_GPIO(output.gpio) || output.minimum_us == 0 ||
+            output.minimum_us >= output.center_us || output.center_us >= output.maximum_us ||
+            duty_for_pulse(output.maximum_us, frequency_hz, resolution) >= (1u << resolution)) {
+            return ESP_ERR_INVALID_ARG;
+        }
+        for (size_t j = 0; j < i; ++j) {
+            if (outputs[j].gpio == output.gpio) {
+                return ESP_ERR_INVALID_ARG;
+            }
+        }
+    }
+
+    ledc_timer_config_t timer_config{};
+    timer_config.speed_mode = mode;
+    timer_config.duty_resolution = resolution;
+    timer_config.timer_num = timer;
+    timer_config.freq_hz = frequency_hz;
+    timer_config.clk_cfg = LEDC_AUTO_CLK;
+    esp_err_t result = ledc_timer_config(&timer_config);
+    if (result != ESP_OK) {
+        return result;
+    }
+    timer_started_ = true;
+    frequency_hz_ = ledc_get_freq(mode, timer);
+    if (frequency_hz_ == 0) {
+        stop();
+        return ESP_FAIL;
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        outputs_[i] = outputs[i];
+        ledc_channel_config_t channel_config{};
+        channel_config.gpio_num = outputs[i].gpio;
+        channel_config.speed_mode = mode;
+        channel_config.channel = static_cast<ledc_channel_t>(i);
+        channel_config.timer_sel = timer;
+        channel_config.duty = duty_for_pulse(outputs[i].center_us, frequency_hz_, resolution);
+        result = ledc_channel_config(&channel_config);
+        if (result != ESP_OK) {
+            stop();
+            return result;
+        }
+        pulses_[i] = outputs[i].center_us;
+        ++count_;
     }
     return ESP_OK;
 }
 
-esp_err_t Servo::setLimits(uint16_t min_us, uint16_t max_us) {
-    if (min_us >= max_us) {
-        ESP_LOGW(TAG, "Invalid limits: min %u >= max %u", min_us, max_us);
-        return ESP_ERR_INVALID_ARG;
+esp_err_t Controller::write(size_t index, uint16_t position) {
+    if (index >= count_) {
+        return timer_started_ ? ESP_ERR_INVALID_ARG : ESP_ERR_INVALID_STATE;
     }
-    config_.min_pulse_width_us = min_us;
-    config_.max_pulse_width_us = max_us;
-    ESP_LOGI(TAG, "Limits updated to [%u, %u] us", min_us, max_us);
-    return ESP_OK;
+    return write_pulse_us(index, pulse_for_position(outputs_[index], position));
 }
 
-esp_err_t Servo::setRange(int range_percent) {
-    if (range_percent < 0 || range_percent > 100) {
-        ESP_LOGW(TAG, "Range %d%% out of bounds [0, 100]", range_percent);
-        return ESP_ERR_INVALID_ARG;
+esp_err_t Controller::write_pulse_us(size_t index, uint16_t pulse_us) {
+    if (index >= count_) {
+        return timer_started_ ? ESP_ERR_INVALID_ARG : ESP_ERR_INVALID_STATE;
     }
-    if (range_percent != range_) {
-        range_ = range_percent;
-        ESP_LOGI(TAG, "Range updated to %d%%", range_percent);
+    const auto &output = outputs_[index];
+    const uint16_t clamped = std::clamp(pulse_us, output.minimum_us, output.maximum_us);
+    if (clamped == pulses_[index]) {
+        return ESP_OK;
+    }
+    // The app owns these channels in one task, so the ordinary LEDC duty API suffices.
+    esp_err_t result = ledc_set_duty(mode, static_cast<ledc_channel_t>(index),
+                                   duty_for_pulse(clamped, frequency_hz_, resolution));
+    if (result == ESP_OK) {
+        result = ledc_update_duty(mode, static_cast<ledc_channel_t>(index));
+    }
+    if (result == ESP_OK) {
+        pulses_[index] = clamped;
+    }
+    return result;
+}
+
+esp_err_t Controller::center() {
+    if (!timer_started_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    for (size_t i = 0; i < count_; ++i) {
+        const esp_err_t result = write_pulse_us(i, outputs_[i].center_us);
+        if (result != ESP_OK) {
+            return result;
+        }
     }
     return ESP_OK;
 }
 
-esp_err_t Servo::setOffset(int offset_us) {
-    offset_ = offset_us;
-    ESP_LOGI(TAG, "Offset updated to %d us", offset_us);
-    return ESP_OK;
+void Controller::stop() {
+    for (size_t i = 0; i < count_; ++i) {
+        const auto channel = static_cast<ledc_channel_t>(i);
+        ledc_stop(mode, channel, 0);
+        ledc_channel_config_t config{};
+        config.speed_mode = mode;
+        config.channel = channel;
+        config.deconfigure = true;
+        ledc_channel_config(&config);
+        gpio_reset_pin(static_cast<gpio_num_t>(outputs_[i].gpio));
+    }
+    count_ = 0;
+    if (timer_started_) {
+        ledc_timer_pause(mode, timer);
+        ledc_timer_config_t config{};
+        config.speed_mode = mode;
+        config.timer_num = timer;
+        config.deconfigure = true;
+        ledc_timer_config(&config);
+    }
+    timer_started_ = false;
+    frequency_hz_ = 0;
+    pulses_.fill(0);
 }
 
-esp_err_t Servo::setInvert(bool invert) {
-    invert_steering_ = invert;
-    ESP_LOGI(TAG, "Invert updated to %s", invert ? "true" : "false");
-    return ESP_OK;
+uint16_t Controller::pulse_us(size_t index) const {
+    return index < count_ ? pulses_[index] : 0;
 }
 
-esp_err_t Servo::setFailsafe() {
-    return setPosition(config_.failsafe_position);
-}
-
-// Safety methods
-esp_err_t Servo::enable() {
-    enabled_ = true;
-    ESP_LOGI(TAG, "Servo enabled");
-    return ESP_OK;
-}
-
-esp_err_t Servo::disable() {
-    enabled_ = false;
-    // Set to failsafe position when disabled
-    esp_err_t ret = mcpwm_comparator_set_compare_value(comparator_, calculateCompareValue(config_.failsafe_position));
-    ESP_LOGI(TAG, "Servo disabled, set to failsafe position");
-    return ret;
-}
+} // namespace servo

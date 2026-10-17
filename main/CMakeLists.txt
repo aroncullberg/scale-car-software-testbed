@@ -1,21 +1,7 @@
 idf_component_register(
-    SRCS
-        "main.cpp"
-    INCLUDE_DIRS
-        "."
-    REQUIRES
-        rc
-        servo
-        vehicle
-        power_monitor
-        nav
-        proto_nmea
-        imu
-        telemetry
+    SRCS "main.cpp" "sensors.cpp" "storage_check.cpp"
+    INCLUDE_DIRS "."
+    PRIV_REQUIRES esp32-rclink vehicle data_capture esp_driver_gpio esp_driver_spi
+                  proto_nmea imu power_monitor storage esp_hw_support recording web
 )
-
-target_compile_options(${COMPONENT_LIB} PRIVATE 
-    -fno-rtti  # Disable RTTI
-    -fno-exceptions  # Optional: also disable exceptions if not needed
-)
-
+target_compile_features(${COMPONENT_LIB} PRIVATE cxx_std_17)
